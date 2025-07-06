@@ -47,18 +47,19 @@ function App() {
     // --- Authentication ---
     const login = useGoogleLogin({
       onSuccess: async (tokenResponse) => {
-        console.log("LOGIN HOOK: Success callback triggered.", tokenResponse);
         setAccessToken(tokenResponse.access_token);
         try {
           const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` } });
           const profile = await profileRes.json();
           setUser(profile);
           loadSheetData(tokenResponse.access_token);
-        } catch (error) { console.error("LOGIN HOOK: Failed to fetch profile:", error); }
+        } catch (error) { console.error("Failed to fetch profile:", error); }
       },
-      onError: (error) => console.log('LOGIN HOOK: Error callback triggered.', error),
-      onNonOAuthError: (error) => console.log('LOGIN HOOK: Non-OAuth Error or popup closed.', error)
+      onError: () => console.log('Login Failed'),
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
     });
+
+    
 
     const logout = () => {
         googleLogout();
