@@ -26,7 +26,8 @@ function App() {
     const [sheetInfo, setSheetInfo] = useState({ name: '', id: 0 });
     const [isLoading, setIsLoading] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
-    const [accessToken, setAccessToken] = useState<string | null>(null);
+    // const [accessToken, setAccessToken] = useState<string | null>(null);
+    const [accessToken, setAccessToken] = useState<string | null>(() => localStorage.getItem('accessToken'));
     
     // Dashboard State
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
@@ -44,29 +45,65 @@ function App() {
         EndDateTime: getCurrentDateTimeLocal()
     });
 
-    // --- Authentication ---
-    const login = useGoogleLogin({
-      onSuccess: async (tokenResponse) => {
-        setAccessToken(tokenResponse.access_token);
+    // // --- Authentication ---
+    // const login = useGoogleLogin({
+    //   onSuccess: async (tokenResponse) => {
+    //     setAccessToken(tokenResponse.access_token);
+    //     try {
+    //       const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` } });
+    //       const profile = await profileRes.json();
+    //       setUser(profile);
+    //       loadSheetData(tokenResponse.access_token);
+    //     } catch (error) { console.error("Failed to fetch profile:", error); }
+    //   },
+    //   onError: () => console.log('Login Failed'),
+    //   scope: 'https://www.googleapis.com/auth/spreadsheets',
+    // });
+
+    const fetchProfileAndData = async (token: string) => {
+        setIsLoading(true);
         try {
-          const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` } });
-          const profile = await profileRes.json();
-          setUser(profile);
-          loadSheetData(tokenResponse.access_token);
-        } catch (error) { console.error("Failed to fetch profile:", error); }
+            const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!profileRes.ok) throw new Error('Failed to fetch profile');
+            const profile = await profileRes.json();
+            setUser(profile);
+            await loadSheetData(token);
+        } catch (error) {
+            console.error("Authentication Error:", error);
+            logout(); // Clear state if token is invalid
+        }
+    };
+    
+    const login = useGoogleLogin({
+      onSuccess: (codeResponse) => {
+        localStorage.setItem('accessToken', codeResponse.access_token);
+        setAccessToken(codeResponse.access_token);
+        fetchProfileAndData(codeResponse.access_token);
       },
-      onError: () => console.log('Login Failed'),
+      onError: (error) => console.log('Login Failed:', error),
       scope: 'https://www.googleapis.com/auth/spreadsheets',
     });
 
-    
-
     const logout = () => {
         googleLogout();
+        localStorage.removeItem('accessToken');
         setUser(null);
         setSheetData([]);
         setAccessToken(null);
-    };
+    };  
+
+    // Check for existing token on initial load
+    useEffect(() => {
+        if (accessToken) {
+            fetchProfileAndData(accessToken);
+        }
+    }, []);
+    // const logout = () => {
+    //     googleLogout();
+    //     setUser(null);
+    //     setSheetData([]);
+    //     setAccessToken(null);
+    // };
 
     // --- Data Handling ---
     const loadSheetData = async (token: string) => {
