@@ -152,12 +152,12 @@ function App() {
         // --- END NEW LOGIC ---
 
         let rowsToAdd: any[][] = [];
-        const formattedStartDateTime = newEntry.DateTime.replace('T', ' ');
         const formattedEndDateTime = newEntry.EndDateTime.replace('T', ' ');
+        const formattedStartDateTime = newEntry.DateTime.replace('T', ' ');
 
         if (newEntry.Activity === 'Sleep') {
-            const startDateTime = new Date(newEntry.DateTime);
             const endDateTime = new Date(newEntry.EndDateTime);
+            const startDateTime = new Date(newEntry.DateTime);
             const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 60000);
 
             if (durationMinutes < 0) {
