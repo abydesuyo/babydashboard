@@ -46,6 +46,7 @@ function App() {
 
     // --- Authentication ---
     const login = useGoogleLogin({
+      scope: 'https://www.googleapis.com/auth/spreadsheets',
       onSuccess: async (tokenResponse) => {
         console.log("LOGIN HOOK: Success callback triggered.", tokenResponse);
         setAccessToken(tokenResponse.access_token);
