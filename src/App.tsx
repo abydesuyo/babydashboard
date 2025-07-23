@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useGoogleLogin, googleLogout } from '@react-oauth/google';
 import { Dashboard } from './components/Dashboard';
-import { fetchData, updateRowInSheet, insertRowsInSheet } from './utils/googleSheets';
+import { fetchData, insertRowsInSheet, deleteRowInSheet } from './utils/googleSheets';
 import { calculateSummary, processDataForChart } from './utils/dataProcessing';
 import type { UserProfile, ActivityRow } from './types';
 import { activityConfig } from './config/activityConfig';
@@ -18,6 +18,11 @@ const getCurrentDateTimeLocal = () => {
 const MoonIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>;
 const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>;
 
+// --- Debug Mode ---
+// Set to true to enable debug logs and additional features
+// Set to false for production use
+const DEBUG = true;
+
 // --- Main App Component ---
 function App() {
     // App State
@@ -27,15 +32,15 @@ function App() {
     const [isLoading, setIsLoading] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     const [accessToken, setAccessToken] = useState<string | null>(null);
-    
+
     // Dashboard State
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
     const [selectedActivity, setSelectedActivity] = useState('formula');
-    
+
     // Editing State
     const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
     const [editRowData, setEditRowData] = useState<ActivityRow | null>(null);
-    
+
     // New Entry State
     const [newEntry, setNewEntry] = useState({
         DateTime: getCurrentDateTimeLocal(),
@@ -46,19 +51,24 @@ function App() {
 
     // --- Authentication ---
     const login = useGoogleLogin({
-      scope: 'https://www.googleapis.com/auth/spreadsheets',
-      onSuccess: async (tokenResponse) => {
-        console.log("LOGIN HOOK: Success callback triggered.", tokenResponse);
-        setAccessToken(tokenResponse.access_token);
-        try {
-          const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { 'Authorization': `Bearer ${tokenResponse.access_token}` } });
-          const profile = await profileRes.json();
-          setUser(profile);
-          loadSheetData(tokenResponse.access_token);
-        } catch (error) { console.error("LOGIN HOOK: Failed to fetch profile:", error); }
-      },
-      onError: (error) => console.log('LOGIN HOOK: Error callback triggered.', error),
-      onNonOAuthError: (error) => console.log('LOGIN HOOK: Non-OAuth Error or popup closed.', error)
+        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        onSuccess: async (response) => {
+            const { access_token: accessToken } = response;
+            setAccessToken(accessToken);
+
+            try {
+                const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                const userProfile = await profileResponse.json();
+                setUser(userProfile);
+                loadSheetData(accessToken);
+            } catch (error) {
+                console.error("LOGIN HOOK: Error fetching user profile:", error);
+            }
+        },
+        onError: (error) => console.log('LOGIN HOOK: Error callback triggered.', error),
+        onNonOAuthError: (error) => console.log('LOGIN HOOK: Non-OAuth Error or popup closed.', error)
     });
 
     const logout = () => {
@@ -69,86 +79,149 @@ function App() {
     };
 
     // --- Data Handling ---
-    const loadSheetData = async (token: string) => {
-        setIsLoading(true);
+    const loadSheetData = async (token: string, showLoading = true) => {
+        if (showLoading) setIsLoading(true);
         try {
             const { data, sheetName, sheetId } = await fetchData(token);
-            setSheetData(data);
+            // Add sheetRowIndex (row 2 for first data row, etc.)
+            const dataWithIndex = data.map((row, i) => ({
+                ...row,
+                sheetRowIndex: i + 2,
+                originalIndex: (i + 2).toString()
+            }));
+            setSheetData(dataWithIndex);
             setSheetInfo({ name: sheetName, id: sheetId });
-        } catch (err) { console.error("Error in loadSheetData: ", err);
-        } finally { setIsLoading(false); }
-    };
-
-    const handleSave = async (sheetRowIndex: number) => {
-        if (!editRowData || !sheetInfo.name || !accessToken) return;
-        setIsLoading(true);
-        try {
-            await updateRowInSheet(accessToken, sheetInfo.name, editRowData, sheetRowIndex);
-            setEditingRowIndex(null);
-            setEditRowData(null);
-            await loadSheetData(accessToken);
         } catch (err) {
-            console.error("Error saving data: ", err);
-            setIsLoading(false);
+            console.error("Error in loadSheetData: ", err);
+        } finally {
+            if (showLoading) setIsLoading(false);
         }
     };
 
+    // --- Add/Edit/Delete Logic ---
+    const findInsertIndex = (dateStr: string): number => {
+        const newDate = new Date(dateStr.replace('T', ' '));
+        for (let i = 0; i < sheetData.length; i++) {
+            const rowDate = new Date(sheetData[i].Date.replace('T', ' '));
+            // For descending order: find the first row where rowDate < newDate
+            if (rowDate < newDate) {
+                // Insert above this row (i.e., at its index)
+                return sheetData[i].sheetRowIndex;
+            }
+        }
+        // If not found, insert at the end (after the last row)
+        return sheetData.length > 0 ? sheetData[sheetData.length - 1].sheetRowIndex + 1 : 2;
+    };
+
     const handleAdd = async () => {
+        if (DEBUG) {
+            console.log('[ADD] newEntry:', newEntry);
+            console.log('[ADD] sheetInfo:', sheetInfo);
+            console.log('[ADD] accessToken:', accessToken);
+        }
         if (!newEntry.DateTime || !newEntry.Activity || !accessToken || !sheetInfo.name) {
             alert("Please fill out all required fields.");
             return;
         }
-        setIsLoading(true);
-
-        // --- NEW: Find the correct row to insert the new entry ---
-        const newEntryDate = new Date(newEntry.DateTime);
-        let targetRowIndex = 1; // Default to appending at the beginning
-                
-        // We will insert the new entry AFTER this one.
-        for (let i = 1; i < sheetData.length - 1;  i++) {
-            const existingDate = new Date(sheetData[i].Date.replace(' ', 'T'));
-            if (newEntryDate > existingDate) {
-                targetRowIndex = Number(sheetData[i].originalIndex) - 2; // Convert to 0-based index
-                break;             
-            }
-        }
-        // --- END NEW LOGIC ---
-
         let rowsToAdd: any[][] = [];
-        const formattedEndDateTime = newEntry.EndDateTime.replace('T', ' ');
-        const formattedStartDateTime = newEntry.DateTime.replace('T', ' ');
+        let insertIndex = findInsertIndex(newEntry.DateTime);
+
+        if (DEBUG) {
+            console.log('[ADD] rowsToAdd:', rowsToAdd, 'insertIndex:', insertIndex);
+        }
 
         if (newEntry.Activity === 'Sleep') {
             const endDateTime = new Date(newEntry.EndDateTime);
             const startDateTime = new Date(newEntry.DateTime);
             const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 60000);
-
             if (durationMinutes < 0) {
                 alert("End time must be after start time.");
-                setIsLoading(false);
                 return;
             }
             rowsToAdd = [
-                [formattedEndDateTime, 'SleepEnded', durationMinutes.toString()],
-                [formattedStartDateTime, 'SleepStarted', '1'],
-            ];
-
+                [newEntry.EndDateTime.replace('T', ' '), 'SleepEnded', durationMinutes.toString()],
+                [newEntry.DateTime.replace('T', ' '), 'SleepStarted', '1'],
+            ].sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
         } else {
             rowsToAdd = [[
-                formattedStartDateTime,
+                newEntry.DateTime.replace('T', ' '),
                 newEntry.Activity,
                 newEntry.Activity === 'Pooped' ? '1' : newEntry.Quantity,
             ]];
         }
-        
-        try {
-            await insertRowsInSheet(accessToken, sheetInfo.name, sheetInfo.id, rowsToAdd, targetRowIndex);
-            setNewEntry({ DateTime: getCurrentDateTimeLocal(), Activity: 'Formula', Quantity: '', EndDateTime: getCurrentDateTimeLocal() });
-            await loadSheetData(accessToken);
-        } catch (err) {
-            console.error("Error adding data: ", err);
-            setIsLoading(false);
+
+        await insertRowsInSheet(accessToken, sheetInfo.name, sheetInfo.id, rowsToAdd, insertIndex);
+        if (DEBUG) console.log('[ADD] Inserted rows, reloading data...');
+        await loadSheetData(accessToken);
+    };
+
+    const handleSave = async (sheetRowIndex: number) => {
+        if (DEBUG) {
+            console.log('[EDIT] editRowData:', editRowData);
+            console.log('[EDIT] sheetRowIndex:', sheetRowIndex);
+            console.log('[EDIT] sheetInfo:', sheetInfo);
+            console.log('[EDIT] accessToken:', accessToken);
         }
+        if (!editRowData || !sheetInfo.name || !accessToken) return;
+
+        if (editRowData.Activity === 'SleepStarted' || editRowData.Activity === 'SleepEnded') {
+            const relatedRows = sheetData.filter(row =>
+                (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') &&
+                new Date(row.Date).toDateString() === new Date(editRowData.Date).toDateString()
+            );
+            for (const row of relatedRows) {
+                await deleteRowInSheet(accessToken, sheetInfo.id, row.sheetRowIndex);
+            }
+            const endDateTime = new Date(editRowData.EndDateTime!);
+            const startDateTime = new Date(editRowData.Date);
+            const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 60000);
+            const sleepRows = [
+                [editRowData.EndDateTime!.replace('T', ' '), 'SleepEnded', durationMinutes.toString()],
+                [editRowData.Date.replace('T', ' '), 'SleepStarted', '1'],
+            ].sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
+            const insertIndex = findInsertIndex(editRowData.Date);
+            await insertRowsInSheet(accessToken, sheetInfo.name, sheetInfo.id, sleepRows, insertIndex);
+        } else {
+            await deleteRowInSheet(accessToken, sheetInfo.id, sheetRowIndex);
+            const newInsertIndex = findInsertIndex(editRowData.Date);
+            await insertRowsInSheet(
+                accessToken,
+                sheetInfo.name,
+                sheetInfo.id,
+                [[editRowData.Date, editRowData.Activity, editRowData.Quantity]],
+                newInsertIndex
+            );
+        }
+        if (DEBUG) console.log('[EDIT] Save complete, reloading data...');
+        setEditingRowIndex(null);
+        setEditRowData(null);
+        await loadSheetData(accessToken);
+    };
+
+    const handleDelete = async (sheetRowIndex: number, row?: ActivityRow) => {
+        if (DEBUG) {
+            console.log('[DELETE] sheetRowIndex:', sheetRowIndex);
+            console.log('[DELETE] row:', row);
+            console.log('[DELETE] sheetInfo:', sheetInfo);
+            console.log('[DELETE] accessToken:', accessToken);
+        }
+        if (!row || !sheetInfo.id || !accessToken) return;
+
+        if (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') {
+            const relatedRows = sheetData.filter(r =>
+                (r.Activity === 'SleepStarted' || r.Activity === 'SleepEnded') &&
+                new Date(r.Date).toDateString() === new Date(row.Date).toDateString()
+            );
+            for (const r of relatedRows) {
+                await deleteRowInSheet(accessToken, sheetInfo.id, r.sheetRowIndex);
+            }
+        } else {
+            await deleteRowInSheet(accessToken, sheetInfo.id, sheetRowIndex);
+        }
+        if (DEBUG) console.log('[DELETE] Delete complete, reloading data...');
+        setEditingRowIndex(null);
+        setEditRowData(null);
+        await loadSheetData(accessToken);
     };
 
     // --- UI Handlers & Effects ---
@@ -178,8 +251,8 @@ function App() {
     }), [sheetData, dateRange]);
 
     const activityFilteredData = useMemo(() => {
-      const activityToFilter = activityConfig[selectedActivity as keyof typeof activityConfig].dataLabel;
-      return dateFilteredData.filter(row => row.Activity === activityToFilter);
+        const activityToFilter = activityConfig[selectedActivity as keyof typeof activityConfig].dataLabel;
+        return dateFilteredData.filter(row => row.Activity === activityToFilter);
     }, [dateFilteredData, selectedActivity]);
 
     const summary = useMemo(() => calculateSummary(dateFilteredData), [dateFilteredData]);
@@ -192,7 +265,7 @@ function App() {
         }
         return [value.toFixed(0), name];
     };
-    
+
     const renderNewEntryFields = () => {
         if (newEntry.Activity === 'Sleep') {
             return (
@@ -210,21 +283,43 @@ function App() {
         }
         if (newEntry.Activity === 'Formula') {
             return (
-                 <div className="filter-item">
+                <div className="filter-item">
                     <label htmlFor="new-quantity">Quantity (ml)</label>
                     <input id="new-quantity" type="number" min="0" name="Quantity" placeholder="e.g., 160" value={newEntry.Quantity} onChange={handleNewEntryChange} />
                 </div>
             );
         }
-        return <div className="filter-item" style={{flexGrow: 0.5}}></div>; // Placeholder to maintain layout
+        return <div className="filter-item" style={{flexGrow: 0.5}}></div>;
     };
 
+    useEffect(() => {
+        if (!accessToken) return;
+        const interval = setInterval(() => {
+            loadSheetData(accessToken, false);
+        }, 60000);
+        return () => clearInterval(interval);
+    }, [accessToken]);
+
+    useEffect(() => {
+        if (!accessToken) return;
+        // Assume you get expires_in from login response (in seconds)
+        const expiresIn = 3600; // Example: 1 hour
+        const timeout = setTimeout(() => {
+            logout();
+            alert("Session expired. Please log in again.");
+        }, expiresIn * 1000);
+        return () => clearTimeout(timeout);
+    }, [accessToken]);
 
     return (
         <div className="App">
             <header className="App-header">
                 <h1>Baby Activity Dashboard</h1>
-                {user && ( <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme"> {theme === 'light' ? <MoonIcon /> : <SunIcon />} </button> )}
+                {user && (
+                    <button className="theme-toggle" onClick={toggleTheme} aria-label="Toggle theme">
+                        {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+                    </button>
+                )}
             </header>
             <main>
                 {!user ? (
@@ -238,8 +333,10 @@ function App() {
                             <p>Welcome, {user.name}!</p>
                             <button onClick={logout} className="logout-button">Logout</button>
                         </div>
-                        {isLoading && <div className="loading-container"><p>Loading...</p></div>}
-                        {!isLoading && (
+                        {isLoading && sheetData.length === 0 && (
+                            <div className="loading-container"><p>Loading...</p></div>
+                        )}
+                        {(!isLoading || sheetData.length > 0) && (
                             <>
                                 <div className="add-entry-container filters-container">
                                     <div className="filter-item">
@@ -250,25 +347,33 @@ function App() {
                                             <option value="Pooped">Pooped</option>
                                         </select>
                                     </div>
-
                                     {newEntry.Activity !== 'Sleep' && (
                                         <div className="filter-item">
                                             <label htmlFor="new-datetime">Date & Time</label>
                                             <input id="new-datetime" type="datetime-local" name="DateTime" value={newEntry.DateTime} onChange={handleNewEntryChange} />
                                         </div>
                                     )}
-
                                     {renderNewEntryFields()}
                                     <div className="filter-item">
                                         <button onClick={handleAdd} className="add-button">Add Entry</button>
                                     </div>
                                 </div>
                                 <Dashboard
-                                    summary={summary} dateRange={dateRange} setDateRange={setDateRange}
-                                    selectedActivity={selectedActivity} setSelectedActivity={setSelectedActivity}
-                                    handleReset={handleReset} chartData={chartData} tooltipFormatter={tooltipFormatter}
-                                    dateFilteredData={dateFilteredData} editingRowIndex={editingRowIndex} editRowData={editRowData}
-                                    handleEditClick={handleEditClick} handleSaveClick={handleSave} handleCancelClick={handleCancelClick}
+                                    summary={summary}
+                                    dateRange={dateRange}
+                                    setDateRange={setDateRange}
+                                    selectedActivity={selectedActivity}
+                                    setSelectedActivity={setSelectedActivity}
+                                    handleReset={handleReset}
+                                    chartData={chartData}
+                                    tooltipFormatter={tooltipFormatter}
+                                    dateFilteredData={dateFilteredData}
+                                    editingRowIndex={editingRowIndex}
+                                    editRowData={editRowData}
+                                    handleEditClick={handleEditClick}
+                                    handleSaveClick={handleSave}
+                                    handleCancelClick={handleCancelClick}
+                                    handleDeleteClick={handleDelete}
                                     handleEditChange={handleEditChange}
                                 />
                             </>

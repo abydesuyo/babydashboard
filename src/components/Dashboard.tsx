@@ -21,6 +21,7 @@ type DashboardProps = {
   handleSaveClick: (rowIndex: number) => void;
   handleCancelClick: () => void;
   handleEditChange: (e: React.ChangeEvent<HTMLInputElement>, key: string) => void;
+  handleDeleteClick: (rowIndex: number) => void;
 };
 
 const formatDate = (dateStr: string) => {
@@ -45,6 +46,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   handleSaveClick,
   handleCancelClick,
   handleEditChange,
+  handleDeleteClick,
 }) => {
   const currentConfig = activityConfig[selectedActivity as keyof typeof activityConfig];
 
@@ -116,12 +118,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <td>{row.Activity === 'Formula' ? 'ml' : row.Activity === 'SleepEnded' ? 'minutes' : ''}</td>
                       <td>
                           {isEditing ? (
-                              <>
-                                  <button className="save-button" onClick={() => handleSaveClick(Number(row.originalIndex))}>Save</button>
-                                  <button className="cancel-button" onClick={handleCancelClick}>Cancel</button>
-                              </>
+                            <>
+                              <button className="save-button" onClick={() => handleSaveClick(Number(row.originalIndex))}>Save</button>
+                              <button className="cancel-button" onClick={handleCancelClick}>Cancel</button>
+                              <button
+                                className="delete-button"
+                                onClick={() => {
+                                  console.log("Dashboard: Delete clicked for row", row.sheetRowIndex, row);
+                                  handleDeleteClick(Number(row.sheetRowIndex));
+                                }}
+                              >
+                                Delete
+                              </button>
+                            </>
                           ) : (
-                              <button className="edit-button" onClick={() => handleEditClick(row, index)}>Edit</button>
+                            <button className="edit-button" onClick={() => handleEditClick(row, index)}>Edit</button>
                           )}
                       </td>
                   </tr>

@@ -76,3 +76,30 @@ export const insertRowsInSheet = async (accessToken: string, sheetName: string, 
         resource: { values: rows },
     });
 };
+
+export const deleteRowInSheet = async (
+  accessToken: string,
+  sheetId: number,
+  rowIndex: number
+) => {
+  console.log("deleteRowInSheet called with:", { accessToken, sheetId, rowIndex });
+  await initGapiClient(accessToken);
+  await gapi.client.sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    resource: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: 'ROWS',
+              startIndex: rowIndex - 1, // 1-based to 0-based
+              endIndex: rowIndex,       // exclusive
+            },
+          },
+        },
+      ],
+    },
+  });
+  console.log("deleteRowInSheet finished for row:", rowIndex);
+};

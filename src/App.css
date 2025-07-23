@@ -308,7 +308,8 @@ th {
 /* --- Edit/Save/Cancel Buttons --- */
 .table-container td .edit-button,
 .table-container td .save-button,
-.table-container td .cancel-button {
+.table-container td .cancel-button, 
+.table-container td .delete-button {
     border: none;
     padding: 6px 12px;
     border-radius: 4px;
@@ -328,6 +329,10 @@ th {
 
 .table-container td .cancel-button {
     background-color: #7f8c8d; /* Gray */
+}
+
+.table-container td .delete-button {
+    background-color: #c0392b; /* Red */
 }
 
 .table-container td input[type="text"] {
@@ -356,6 +361,8 @@ th {
     flex-shrink: 0;
     align-self: flex-end; /* Align with bottom of inputs */
 }
+
+
 
 @media (max-width: 991px) {
     .add-button {

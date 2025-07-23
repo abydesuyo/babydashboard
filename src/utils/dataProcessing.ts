@@ -1,21 +1,15 @@
 // src/utils/dataProcessing.ts
-// src/utils/dataProcessing.ts
 import type { ActivityRow } from '../types';
 
 export const parseSheetData = (values: any[][]): ActivityRow[] => {
-  if (!values || values.length < 2) {
-    return [];
-  }
-  const header = values[0];
-  const data = values.slice(1);
-  return data.map((row, index) => {
-    const rowData: ActivityRow = {};
-    header.forEach((key, headerIndex) => {
-      rowData[key] = row[headerIndex];
-    });
-    rowData.originalIndex = (index + 2).toString();
-    return rowData;
-  });
+  if (!values || values.length < 2) return [];
+  return values.slice(1).map((row, i) => ({
+    Date: row[0] || '',
+    Activity: row[1] || '',
+    Quantity: row[2] || '',
+    sheetRowIndex: i + 2,
+    originalIndex: (i + 2).toString(),
+  }));
 };
 
 export const processDataForChart = (data: ActivityRow[]) => {
