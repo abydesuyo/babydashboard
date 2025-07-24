@@ -102,5 +102,5 @@ debugLog("[DELETE] deleteRowInSheet called for row:", rowIndex);
       ],
     },
   });
-  console.log("deleteRowInSheet finished for row:", rowIndex);
+  debugLog("[DELETE] deleteRowInSheet finished for row:", rowIndex);
 };
