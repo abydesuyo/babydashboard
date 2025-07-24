@@ -1,6 +1,7 @@
 // src/utils/googleSheets.ts
 import { gapi } from 'gapi-script';
 import { parseSheetData } from './dataProcessing';
+import { debugLog } from '../Debug';
 
 const SPREADSHEET_ID = import.meta.env.VITE_SHEET_ID;
 
@@ -82,7 +83,7 @@ export const deleteRowInSheet = async (
   sheetId: number,
   rowIndex: number
 ) => {
-  console.log("deleteRowInSheet called with:", { accessToken, sheetId, rowIndex });
+debugLog("[DELETE] deleteRowInSheet called for row:", rowIndex);
   await initGapiClient(accessToken);
   await gapi.client.sheets.spreadsheets.batchUpdate({
     spreadsheetId: SPREADSHEET_ID,

@@ -3,6 +3,7 @@ import React from 'react';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { activityConfig } from '../config/activityConfig';
 import type { ActivityRow } from '../types';
+import { debugLog } from '../Debug'; // Import debugLog for logging
 
 // Define Props type for our component
 type DashboardProps = {
@@ -21,7 +22,7 @@ type DashboardProps = {
   handleSaveClick: (rowIndex: number) => void;
   handleCancelClick: () => void;
   handleEditChange: (e: React.ChangeEvent<HTMLInputElement>, key: string) => void;
-  handleDeleteClick: (rowIndex: number) => void;
+  handleDeleteClick: (rowIndex: number, row: ActivityRow) => void;
 };
 
 const formatDate = (dateStr: string) => {
@@ -102,7 +103,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </ResponsiveContainer>
       </div>
       <div className="table-container">
-        <h2>Filtered Raw Data</h2>
+        <h2>Raw Data</h2>
         <table>
           <thead>
             <tr><th>Date</th><th>Activity</th><th>Quantity</th><th>Units</th><th>Actions</th></tr>
@@ -124,8 +125,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               <button
                                 className="delete-button"
                                 onClick={() => {
-                                  console.log("Dashboard: Delete clicked for row", row.sheetRowIndex, row);
-                                  handleDeleteClick(Number(row.sheetRowIndex));
+                                  debugLog("Dashboard: Delete clicked for row", row.sheetRowIndex, row);
+                                  handleDeleteClick(Number(row.sheetRowIndex), row);
                                 }}
                               >
                                 Delete

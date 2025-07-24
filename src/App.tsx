@@ -6,6 +6,7 @@ import { calculateSummary, processDataForChart } from './utils/dataProcessing';
 import type { UserProfile, ActivityRow } from './types';
 import { activityConfig } from './config/activityConfig';
 import './App.css';
+import { debugLog } from './Debug';
 
 // --- Helper function to get current datetime in the required format ---
 const getCurrentDateTimeLocal = () => {
@@ -21,7 +22,7 @@ const SunIcon = () => <svg xmlns="http://www.w3.org/2000/svg" width="20" height=
 // --- Debug Mode ---
 // Set to true to enable debug logs and additional features
 // Set to false for production use
-const DEBUG = true;
+
 
 // --- Main App Component ---
 function App() {
@@ -114,11 +115,9 @@ function App() {
     };
 
     const handleAdd = async () => {
-        if (DEBUG) {
-            console.log('[ADD] newEntry:', newEntry);
-            console.log('[ADD] sheetInfo:', sheetInfo);
-            console.log('[ADD] accessToken:', accessToken);
-        }
+        debugLog('[ADD] newEntry:', newEntry);
+        debugLog('[ADD] sheetInfo:', sheetInfo);
+        debugLog('[ADD] accessToken:', accessToken);
         if (!newEntry.DateTime || !newEntry.Activity || !accessToken || !sheetInfo.name) {
             alert("Please fill out all required fields.");
             return;
@@ -126,9 +125,7 @@ function App() {
         let rowsToAdd: any[][] = [];
         let insertIndex = findInsertIndex(newEntry.DateTime);
 
-        if (DEBUG) {
-            console.log('[ADD] rowsToAdd:', rowsToAdd, 'insertIndex:', insertIndex);
-        }
+        debugLog('[ADD] rowsToAdd:', rowsToAdd, 'insertIndex:', insertIndex);
 
         if (newEntry.Activity === 'Sleep') {
             const endDateTime = new Date(newEntry.EndDateTime);
@@ -151,17 +148,13 @@ function App() {
         }
 
         await insertRowsInSheet(accessToken, sheetInfo.name, sheetInfo.id, rowsToAdd, insertIndex);
-        if (DEBUG) console.log('[ADD] Inserted rows, reloading data...');
-        await loadSheetData(accessToken);
     };
 
     const handleSave = async (sheetRowIndex: number) => {
-        if (DEBUG) {
-            console.log('[EDIT] editRowData:', editRowData);
-            console.log('[EDIT] sheetRowIndex:', sheetRowIndex);
-            console.log('[EDIT] sheetInfo:', sheetInfo);
-            console.log('[EDIT] accessToken:', accessToken);
-        }
+        debugLog('[EDIT] editRowData:', editRowData);
+        debugLog('[EDIT] sheetRowIndex:', sheetRowIndex);
+        debugLog('[EDIT] sheetInfo:', sheetInfo);
+        debugLog('[EDIT] accessToken:', accessToken);
         if (!editRowData || !sheetInfo.name || !accessToken) return;
 
         if (editRowData.Activity === 'SleepStarted' || editRowData.Activity === 'SleepEnded') {
@@ -192,20 +185,24 @@ function App() {
                 newInsertIndex
             );
         }
-        if (DEBUG) console.log('[EDIT] Save complete, reloading data...');
+        debugLog('[EDIT] Save complete, reloading data...');
         setEditingRowIndex(null);
         setEditRowData(null);
         await loadSheetData(accessToken);
     };
 
     const handleDelete = async (sheetRowIndex: number, row?: ActivityRow) => {
-        if (DEBUG) {
-            console.log('[DELETE] sheetRowIndex:', sheetRowIndex);
-            console.log('[DELETE] row:', row);
-            console.log('[DELETE] sheetInfo:', sheetInfo);
-            console.log('[DELETE] accessToken:', accessToken);
+        debugLog('[DELETE] sheetRowIndex:', sheetRowIndex);
+        debugLog('[DELETE] row:', row);
+        debugLog('[DELETE] sheetInfo:', sheetInfo);
+        debugLog('[DELETE] accessToken:', accessToken);
+        if (!row || !sheetInfo || !accessToken) { 
+            debugLog('[DELETE] : row is undefined, cannot proceed with deletion.');
+            return;
         }
-        if (!row || !sheetInfo.id || !accessToken) return;
+        else {
+            debugLog('[DELETE] : row is defined, proceeding with deletion...');
+        }
 
         if (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') {
             const relatedRows = sheetData.filter(r =>
@@ -218,7 +215,7 @@ function App() {
         } else {
             await deleteRowInSheet(accessToken, sheetInfo.id, sheetRowIndex);
         }
-        if (DEBUG) console.log('[DELETE] Delete complete, reloading data...');
+        debugLog('[DELETE] Delete complete, reloading data...');
         setEditingRowIndex(null);
         setEditRowData(null);
         await loadSheetData(accessToken);
