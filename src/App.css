@@ -369,3 +369,34 @@ th {
         width: 100%;
     }
 }
+
+
+.success-message {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%);
+    color: #fff;
+    padding: 18px 32px;
+    border-radius: 8px;
+    font-size: 1.3rem;
+    font-weight: 600;
+    box-shadow: 0 8px 24px rgba(39, 174, 96, 0.15);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    animation: popupFadeIn 0.5s;
+}
+
+@keyframes popupFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
