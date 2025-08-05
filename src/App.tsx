@@ -58,6 +58,151 @@ function App() {
     // Success message state
     const [showAddSuccess, setShowAddSuccess] = useState(false);
 
+    // Enhanced token management approach
+
+// State for token management
+const [tokenExpiry, setTokenExpiry] = useState<number | null>(null);
+
+// Modified login function
+const login = useGoogleLogin({
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    onSuccess: async (response) => {
+        const { access_token: accessToken, expires_in } = response;
+        setAccessToken(accessToken);
+        
+        // Set token expiry time (expires_in is in seconds)
+        const expiryTime = Date.now() + (expires_in * 1000);
+        setTokenExpiry(expiryTime);
+
+        try {
+            const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            });
+            const userProfile = await profileResponse.json();
+            setUser(userProfile);
+            loadSheetData(accessToken);
+        } catch (error) {
+            console.error("LOGIN HOOK: Error fetching user profile:", error);
+        }
+    },
+    onError: (error) => console.log('LOGIN HOOK: Error callback triggered.', error),
+    onNonOAuthError: (error) => console.log('LOGIN HOOK: Non-OAuth Error or popup closed.', error)
+});
+
+// Token refresh function (if using refresh tokens)
+const refreshToken = async () => {
+    try {
+        // This would require implementing a backend endpoint
+        // that handles refresh token exchange
+        console.log('Refreshing token...');
+        const response = await fetch('/api/refresh-token', {
+            method: 'POST',
+            credentials: 'include', // If using HTTP-only cookies for refresh tokens
+        });
+        
+        if (response.ok) {
+            const { access_token, expires_in } = await response.json();
+            setAccessToken(access_token);
+            setTokenExpiry(Date.now() + (expires_in * 1000));
+            return true;
+        }
+    } catch (error) {
+        console.error('Token refresh failed:', error);
+    }
+    return false;
+};
+
+// Check token validity before API calls
+const isTokenValid = () => {
+    if (!tokenExpiry) return false;
+    // Add 5-minute buffer before expiry
+    return Date.now() < (tokenExpiry - 5 * 60 * 1000);
+};
+
+// Enhanced API call wrapper
+const makeAuthenticatedRequest = async (apiCall: () => Promise<any>) => {
+    if (!isTokenValid()) {
+        // Try to refresh token first
+        const refreshed = await refreshToken();
+        if (!refreshed) {
+            // If refresh fails, force re-login
+            logout();
+            alert("Session expired. Please log in again.");
+            return null;
+        }
+    }
+    
+    try {
+        return await apiCall();
+    } catch (error: any) {
+        // Check if error is due to invalid token
+        if (error?.status === 401 || error?.message?.includes('unauthorized')) {
+            const refreshed = await refreshToken();
+            if (refreshed) {
+                // Retry the request with new token
+                return await apiCall();
+            } else {
+                logout();
+                alert("Session expired. Please log in again.");
+                return null;
+            }
+        }
+        throw error;
+    }
+};
+
+// Updated loadSheetData with token validation
+const loadSheetData = async (token: string, showLoading = true) => {
+    return makeAuthenticatedRequest(async () => {
+        if (showLoading) setIsLoading(true);
+        try {
+            const { data, sheetName, sheetId } = await fetchData(token);
+            const dataWithIndex = data.map((row, i) => ({
+                ...row,
+                sheetRowIndex: i + 2,
+                originalIndex: (i + 2).toString()
+            }));
+            setSheetData(dataWithIndex);
+            setSheetInfo({ name: sheetName, id: sheetId });
+        } catch (err) {
+            console.error("Error in loadSheetData: ", err);
+        } finally {
+            if (showLoading) setIsLoading(false);
+        }
+    });
+};
+
+// Remove the old token expiry useEffect and replace with:
+useEffect(() => {
+    if (!tokenExpiry) return;
+    
+    // Check token validity every minute
+    const interval = setInterval(() => {
+        if (!isTokenValid()) {
+            // Try to refresh token proactively
+            refreshToken().then(success => {
+                if (!success) {
+                    logout();
+                    alert("Session expired. Please log in again.");
+                }
+            });
+        }
+    }, 60000); // Check every minute
+    
+    return () => clearInterval(interval);
+}, [tokenExpiry]);
+
+// Updated periodic data refresh with token validation
+useEffect(() => {
+    if (!accessToken) return;
+    const interval = setInterval(() => {
+        if (isTokenValid()) {
+            loadSheetData(accessToken, false);
+        }
+    }, 60000);
+    return () => clearInterval(interval);
+}, [accessToken, tokenExpiry]);
+
     // Restore accessToken from localStorage on mount (with expiry check)
     useEffect(() => {
         const storedToken = localStorage.getItem('accessToken');
@@ -87,32 +232,32 @@ function App() {
         }
     }, []);
 
-    // --- Authentication ---
-    const login = useGoogleLogin({
-        scope: 'https://www.googleapis.com/auth/spreadsheets',
-        onSuccess: async (response) => {
-            const { access_token: accessToken } = response;
-            setAccessToken(accessToken);
+    // // --- Authentication ---
+    // const login = useGoogleLogin({
+    //     scope: 'https://www.googleapis.com/auth/spreadsheets',
+    //     onSuccess: async (response) => {
+    //         const { access_token: accessToken } = response;
+    //         setAccessToken(accessToken);
 
-            // Set expiry to 1 week from now
-            const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-            localStorage.setItem('accessToken', accessToken);
-            localStorage.setItem('accessTokenExpiry', (Date.now() + oneWeekMs).toString());
+    //         // Set expiry to 1 week from now
+    //         const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+    //         localStorage.setItem('accessToken', accessToken);
+    //         localStorage.setItem('accessTokenExpiry', (Date.now() + oneWeekMs).toString());
 
-            try {
-                const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
-                const userProfile = await profileResponse.json();
-                setUser(userProfile);
-                loadSheetData(accessToken);
-            } catch (error) {
-                console.error("LOGIN HOOK: Error fetching user profile:", error);
-            }
-        },
-        onError: (error) => console.log('LOGIN HOOK: Error callback triggered.', error),
-        onNonOAuthError: (error) => console.log('LOGIN HOOK: Non-OAuth Error or popup closed.', error)
-    });
+    //         try {
+    //             const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    //                 headers: { 'Authorization': `Bearer ${accessToken}` }
+    //             });
+    //             const userProfile = await profileResponse.json();
+    //             setUser(userProfile);
+    //             loadSheetData(accessToken);
+    //         } catch (error) {
+    //             console.error("LOGIN HOOK: Error fetching user profile:", error);
+    //         }
+    //     },
+    //     onError: (error) => console.log('LOGIN HOOK: Error callback triggered.', error),
+    //     onNonOAuthError: (error) => console.log('LOGIN HOOK: Non-OAuth Error or popup closed.', error)
+    // });
 
     const logout = () => {
         googleLogout();
@@ -123,25 +268,25 @@ function App() {
         localStorage.removeItem('accessTokenExpiry');
     };
 
-    // --- Data Handling ---
-    const loadSheetData = async (token: string, showLoading = true) => {
-        if (showLoading) setIsLoading(true);
-        try {
-            const { data, sheetName, sheetId } = await fetchData(token);
-            // Add sheetRowIndex (row 2 for first data row, etc.)
-            const dataWithIndex = data.map((row, i) => ({
-                ...row,
-                sheetRowIndex: i + 2,
-                originalIndex: (i + 2).toString()
-            }));
-            setSheetData(dataWithIndex);
-            setSheetInfo({ name: sheetName, id: sheetId });
-        } catch (err) {
-            console.error("Error in loadSheetData: ", err);
-        } finally {
-            if (showLoading) setIsLoading(false);
-        }
-    };
+    // // --- Data Handling ---
+    // const loadSheetData = async (token: string, showLoading = true) => {
+    //     if (showLoading) setIsLoading(true);
+    //     try {
+    //         const { data, sheetName, sheetId } = await fetchData(token);
+    //         // Add sheetRowIndex (row 2 for first data row, etc.)
+    //         const dataWithIndex = data.map((row, i) => ({
+    //             ...row,
+    //             sheetRowIndex: i + 2,
+    //             originalIndex: (i + 2).toString()
+    //         }));
+    //         setSheetData(dataWithIndex);
+    //         setSheetInfo({ name: sheetName, id: sheetId });
+    //     } catch (err) {
+    //         console.error("Error in loadSheetData: ", err);
+    //     } finally {
+    //         if (showLoading) setIsLoading(false);
+    //     }
+    // };
 
     // --- Add/Edit/Delete Logic ---
     const findInsertIndex = (dateStr: string): number => {
