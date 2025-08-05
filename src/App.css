@@ -63,13 +63,6 @@ body {
     }
 }
 
-
-/* --- Sleep Time Inputs --- */
-.sleep-time-inputs {
-    display: flex;
-    gap: 10px;
-}
-
 /* --- Sleep Time Inputs --- */
 .sleep-time-inputs {
     display: flex;
@@ -118,7 +111,6 @@ main {
 .login-button:hover {
   opacity: 0.9;
 }
-
 
 /* --- User Info & Logout --- */
 .user-info {
@@ -188,7 +180,6 @@ main {
     font-size: 0.9rem;
 }
 
-
 /* --- Filters --- */
 .filters-container {
     display: flex;
@@ -255,7 +246,6 @@ main {
     }
 }
 
-
 /* --- Chart & Table --- */
 .chart-container {
   margin-bottom: 20px;
@@ -317,6 +307,7 @@ th {
     cursor: pointer;
     font-size: 0.8rem;
     margin-right: 5px;
+    transition: opacity 0.2s;
 }
 
 .table-container td .edit-button {
@@ -335,7 +326,16 @@ th {
     background-color: #c0392b; /* Red */
 }
 
-.table-container td input[type="text"] {
+.table-container td .edit-button:disabled,
+.table-container td .save-button:disabled,
+.table-container td .cancel-button:disabled,
+.table-container td .delete-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.table-container td input[type="text"],
+.table-container td input[type="datetime-local"] {
     width: 90%;
     padding: 6px;
     border: 1px solid var(--border-color);
@@ -357,19 +357,21 @@ th {
     color: white;
     border-radius: 5px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: background-color 0.2s, opacity 0.2s;
     flex-shrink: 0;
     align-self: flex-end; /* Align with bottom of inputs */
 }
 
-
+.add-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
 
 @media (max-width: 991px) {
     .add-button {
         width: 100%;
     }
 }
-
 
 .success-message {
     position: fixed;

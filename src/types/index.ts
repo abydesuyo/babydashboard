@@ -6,10 +6,22 @@ export type UserProfile = {
 };
 
 export type ActivityRow = {
-    Date: string;
-    Activity: string;
-    Quantity: string;
-    sheetRowIndex: number;
-    originalIndex: string;
-    EndDateTime?: string; // Only for sleep edit
+  Date: string;
+  Activity: string;
+  Quantity: string;
+  sheetRowIndex: number;
+  originalIndex: string;
+  EndDateTime?: string; // Only for sleep edit
+};
+
+export type NewEntry = {
+  DateTime: string;
+  Activity: string;
+  Quantity: string;
+  EndDateTime: string;
+};
+
+export type SheetInfo = {
+  name: string;
+  id: number;
 };
