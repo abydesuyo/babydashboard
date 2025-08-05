@@ -58,12 +58,46 @@ function App() {
     // Success message state
     const [showAddSuccess, setShowAddSuccess] = useState(false);
 
+    // Restore accessToken from localStorage on mount (with expiry check)
+    useEffect(() => {
+        const storedToken = localStorage.getItem('accessToken');
+        const storedExpiry = localStorage.getItem('accessTokenExpiry');
+        if (storedToken && storedExpiry) {
+            const now = Date.now();
+            if (now < Number(storedExpiry)) {
+                setAccessToken(storedToken);
+                (async () => {
+                    try {
+                        const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                            headers: { 'Authorization': `Bearer ${storedToken}` }
+                        });
+                        const userProfile = await profileResponse.json();
+                        setUser(userProfile);
+                        loadSheetData(storedToken);
+                    } catch (error) {
+                        localStorage.removeItem('accessToken');
+                        localStorage.removeItem('accessTokenExpiry');
+                        setAccessToken(null);
+                    }
+                })();
+            } else {
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('accessTokenExpiry');
+            }
+        }
+    }, []);
+
     // --- Authentication ---
     const login = useGoogleLogin({
         scope: 'https://www.googleapis.com/auth/spreadsheets',
         onSuccess: async (response) => {
             const { access_token: accessToken } = response;
             setAccessToken(accessToken);
+
+            // Set expiry to 1 week from now
+            const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+            localStorage.setItem('accessToken', accessToken);
+            localStorage.setItem('accessTokenExpiry', (Date.now() + oneWeekMs).toString());
 
             try {
                 const profileResponse = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -85,6 +119,8 @@ function App() {
         setUser(null);
         setSheetData([]);
         setAccessToken(null);
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('accessTokenExpiry');
     };
 
     // --- Data Handling ---
@@ -156,20 +192,14 @@ function App() {
         }
 
         await insertRowsInSheet(accessToken, sheetInfo.name, sheetInfo.id, rowsToAdd, insertIndex);
-        // Optimistically add to UI:
-        setSheetData(prev => [
-            ...rowsToAdd.map((row, i) => ({
-                Date: row[0],
-                Activity: row[1],
-                Quantity: row[2],
-                sheetRowIndex: prev.length + 2 + i, // or recalculate as needed
-                originalIndex: (prev.length + 2 + i).toString(),
-            })),
-            ...prev
-        ]);
+        
+        // Instead of optimistic update, reload the data to maintain proper order and indices
+        await loadSheetData(accessToken, false);
+        
         setShowAddSuccess(true);
         setTimeout(() => setShowAddSuccess(false), 2000);
     };
+
 
     const handleSave = async (sheetRowIndex: number) => {
         debugLog('[EDIT] editRowData:', editRowData);
@@ -320,12 +350,18 @@ function App() {
 
     useEffect(() => {
         if (!accessToken) return;
-        // Assume you get expires_in from login response (in seconds)
-        const expiresIn = 3600; // Example: 1 hour
+        const storedExpiry = localStorage.getItem('accessTokenExpiry');
+        if (!storedExpiry) return;
+        const msUntilExpiry = Number(storedExpiry) - Date.now();
+        if (msUntilExpiry <= 0) {
+            logout();
+            alert("Session expired. Please log in again.");
+            return;
+        }
         const timeout = setTimeout(() => {
             logout();
             alert("Session expired. Please log in again.");
-        }, expiresIn * 1000);
+        }, msUntilExpiry);
         return () => clearTimeout(timeout);
     }, [accessToken]);
 
