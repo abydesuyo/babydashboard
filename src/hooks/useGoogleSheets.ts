@@ -186,16 +186,24 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
           await insertRowsInSheet(sleepRows, insertIndex);
         }
       } else {
+        // Calculate new insertion point BEFORE deleting
+        const newInsertIndex = findInsertIndex(editRowData.Date);
+        
+        // Adjust insertion index if it's after the row we're about to delete
+        // This accounts for the shift that happens when we delete the original row
+        const adjustedInsertIndex = newInsertIndex > editRowData.sheetRowIndex 
+          ? newInsertIndex - 1 
+          : newInsertIndex;
+        
         // Delete original row
         await deleteRowFromSheet(editRowData.sheetRowIndex);
         
-        // Insert updated row
-        const newInsertIndex = findInsertIndex(editRowData.Date);
+        // Insert updated row at adjusted position
         await insertRowsInSheet([[
           editRowData.Date,
           editRowData.Activity,
           editRowData.Quantity
-        ]], newInsertIndex);
+        ]], adjustedInsertIndex);
       }
 
       // Reload data to ensure consistency
