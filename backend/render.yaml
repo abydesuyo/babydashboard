@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: baby-dashboard-api
+    env: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production

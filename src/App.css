@@ -21,6 +21,9 @@
   --accent-color: #5dade2;
   --border-color: #34495e;
   --shadow-color: rgba(0,0,0,0.2);
+  --success-color: #27ae60;
+  --warning-color: #f39c12;
+  --error-color: #e74c3c;
 }
 
 .App {
@@ -139,6 +142,43 @@ main {
 }
 .user-info .logout-button:hover {
     background-color: #a93226;
+}
+
+/* Token Warning */
+.token-warning {
+    background-color: var(--warning-color, #f39c12);
+    color: white;
+    padding: 8px 15px;
+    margin-top: 10px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    font-size: 0.9rem;
+    animation: pulse 2s infinite;
+}
+
+.refresh-button {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.3s;
+    white-space: nowrap;
+}
+
+.refresh-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.8; }
 }
 
 .loading-container {
@@ -400,5 +440,499 @@ th {
     to {
         opacity: 1;
         transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Sheet Selector Styles */
+.sheet-selector {
+    max-width: 600px;
+    margin: 0 auto;
+    background-color: var(--card-background);
+    border-radius: 10px;
+    box-shadow: 0 4px 6px var(--shadow-color);
+    overflow: hidden;
+}
+
+.sheet-selector-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 25px;
+    background-color: var(--header-background);
+    color: var(--header-text);
+}
+
+.sheet-selector-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+}
+
+.close-button {
+    background: none;
+    border: none;
+    color: var(--header-text);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 0;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s;
+}
+
+.close-button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.sheet-selector-content {
+    padding: 25px;
+}
+
+.error-message {
+    background-color: var(--error-color);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.sheets-list {
+    margin-bottom: 30px;
+}
+
+.sheets-list h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 1.1rem;
+}
+
+.sheet-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    transition: box-shadow 0.2s;
+}
+
+.sheet-item:hover {
+    box-shadow: 0 2px 8px var(--shadow-color);
+}
+
+.sheet-info {
+    flex: 1;
+    text-align: left;
+}
+
+.sheet-name {
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 5px;
+}
+
+.sheet-details {
+    display: flex;
+    gap: 15px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.sheet-role {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    text-transform: uppercase;
+}
+
+.sheet-role.owner {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.sheet-role.collaborator {
+    background-color: var(--warning-color);
+    color: white;
+}
+
+.sheet-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.select-button {
+    background-color: var(--accent-color);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background-color 0.2s;
+}
+
+.select-button:hover {
+    opacity: 0.9;
+}
+
+.remove-button {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 4px 8px;
+    border-radius: 50%;
+    cursor: pointer;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.remove-button:hover {
+    background-color: var(--error-color);
+    color: white;
+    border-color: var(--error-color);
+}
+
+.action-buttons {
+    display: flex;
+    gap: 15px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.create-button, .join-button {
+    padding: 12px 24px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+    min-width: 150px;
+}
+
+.create-button {
+    background-color: var(--success-color);
+    color: white;
+}
+
+.join-button {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+.create-button:hover, .join-button:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.create-button:disabled, .join-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.create-form, .join-form {
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    background-color: var(--background-color);
+}
+
+.create-form h3, .join-form h3 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+}
+
+.create-form input, .join-form input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 5px;
+    margin-bottom: 15px;
+    font-size: 1rem;
+    background-color: var(--card-background);
+    color: var(--text-primary);
+    box-sizing: border-box;
+}
+
+.form-actions {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.cancel-button {
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 8px 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cancel-button:hover {
+    background-color: var(--border-color);
+}
+
+/* Enhanced Empty State */
+.empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-secondary);
+    max-width: 500px;
+    margin: 0 auto;
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 20px;
+}
+
+.empty-state h3 {
+    color: var(--text-primary);
+    margin: 0 0 15px 0;
+    font-size: 1.4rem;
+}
+
+.empty-state p {
+    margin: 0 0 30px 0;
+    line-height: 1.6;
+}
+
+.getting-started {
+    background: var(--card-background);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 20px;
+    margin-top: 20px;
+    text-align: left;
+}
+
+.getting-started h4 {
+    margin: 0 0 15px 0;
+    color: var(--text-primary);
+    font-size: 1rem;
+}
+
+.getting-started ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.getting-started li {
+    padding: 8px 0;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+/* Success Message */
+.success-message {
+    background-color: var(--success-color, #27ae60);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    text-align: center;
+    animation: slideIn 0.3s ease-out;
+}
+
+/* Search Box */
+.sheets-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 15px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.search-box {
+    flex: 0 1 200px;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    background: var(--card-background);
+    color: var(--text-primary);
+    font-size: 0.9rem;
+}
+
+.search-input:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.1);
+}
+
+/* Form Improvements */
+.form-help {
+    background: rgba(74, 111, 165, 0.05);
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.form-help p {
+    margin: 0 0 8px 0;
+    color: var(--text-primary);
+    font-weight: 500;
+}
+
+.form-help ul {
+    margin: 0;
+    padding-left: 20px;
+    color: var(--text-secondary);
+}
+
+.form-help li {
+    margin: 4px 0;
+}
+
+.url-input {
+    font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+    font-size: 0.85rem;
+}
+
+/* Animations */
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.no-sheets {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--text-secondary);
+}
+
+.no-sheets p {
+    margin: 0 0 10px 0;
+}
+
+@media (max-width: 768px) {
+    .sheet-selector {
+        margin: 10px;
+        border-radius: 8px;
+    }
+    
+    .sheet-item {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 15px;
+    }
+    
+    .sheet-actions {
+        justify-content: space-between;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .sheets-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .search-box {
+        flex: 1;
+    }
+    
+    .empty-state {
+        padding: 40px 15px;
+    }
+    
+    .empty-state-icon {
+        font-size: 3rem;
+    }
+    
+    .token-warning {
+        flex-direction: column;
+        text-align: center;
+        gap: 10px;
+    }
+    
+    .form-actions {
+        flex-direction: column;
+    }
+}
+
+/* User Info with Sheet Selection */
+.user-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background-color: var(--card-background);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.user-details {
+    flex: 1;
+}
+
+.user-details p {
+    margin: 0 0 5px 0;
+    color: var(--text-primary);
+}
+
+.sheet-info {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.switch-sheet-button {
+    background: none;
+    border: 1px solid var(--accent-color);
+    color: var(--accent-color);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.switch-sheet-button:hover {
+    background-color: var(--accent-color);
+    color: white;
+}
+
+@media (max-width: 768px) {
+    .user-info {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+    }
+    
+    .sheet-info {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
     }
 }

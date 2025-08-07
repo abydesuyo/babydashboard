@@ -1,32 +1,32 @@
 // src/hooks/useGoogleSheets.ts
 import { useState, useCallback } from 'react';
-import { gapi } from 'gapi-script';
+// Lazy load gapi-script to reduce initial bundle size
+const loadGapi = () => import('gapi-script').then(module => module.gapi);
 import { parseSheetData } from '../utils/dataProcessing';
 import type { ActivityRow, NewEntry, SheetInfo } from '../types';
 
-const SPREADSHEET_ID = import.meta.env.VITE_SHEET_ID;
-
-// Initialize GAPI client
+// Initialize GAPI client with lazy loading
 const initGapiClient = async (accessToken: string) => {
+  const gapi = await loadGapi();
   await new Promise<void>((resolve) => gapi.load('client', resolve));
   await gapi.client.init({});
   await gapi.client.load('sheets', 'v4');
   gapi.client.setToken({ access_token: accessToken });
+  return gapi;
 };
 
-export const useGoogleSheets = (accessToken: string | null) => {
+export const useGoogleSheets = (accessToken: string | null, userEmail: string | null, spreadsheetId: string | null) => {
   const [sheetData, setSheetData] = useState<ActivityRow[]>([]);
   const [sheetInfo, setSheetInfo] = useState<SheetInfo>({ name: '', id: 0 });
   const [isOperationPending, setIsOperationPending] = useState(false);
-
   // Load data from sheet
   const loadData = useCallback(async () => {
-    if (!accessToken) return;
+    if (!accessToken || !userEmail || !spreadsheetId) return;
 
-    await initGapiClient(accessToken);
+    const gapi = await initGapiClient(accessToken);
     
     const metadataResponse = await gapi.client.sheets.spreadsheets.get({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId,
     });
 
     const firstSheet = metadataResponse.result.sheets?.[0];
@@ -37,14 +37,14 @@ export const useGoogleSheets = (accessToken: string | null) => {
     }
 
     const dataResponse = await gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId,
       range: firstSheetName,
     });
     
     const parsedData = parseSheetData(dataResponse.result.values || []);
     setSheetData(parsedData);
-    setSheetInfo({ name: firstSheetName, id: firstSheet.properties.sheetId });
-  }, [accessToken]);
+    setSheetInfo({ name: firstSheetName, id: firstSheet.properties.sheetId, spreadsheetId });
+  }, [accessToken, userEmail, spreadsheetId]);
 
   // Find insertion point for chronological order (descending)
   const findInsertIndex = useCallback((dateStr: string): number => {
@@ -59,14 +59,14 @@ export const useGoogleSheets = (accessToken: string | null) => {
   }, [sheetData]);
 
   // Insert rows into sheet
-  const insertRowsInSheet = useCallback(async (rows: any[][], insertIndex: number) => {
-    if (!accessToken) return;
+  const insertRowsInSheet = useCallback(async (rows: unknown[][], insertIndex: number) => {
+    if (!accessToken || !userEmail || !spreadsheetId) return;
 
-    await initGapiClient(accessToken);
+    const gapi = await initGapiClient(accessToken);
 
     // Insert empty rows
     await gapi.client.sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId,
       resource: {
         requests: [{
           insertDimension: {
@@ -84,21 +84,21 @@ export const useGoogleSheets = (accessToken: string | null) => {
 
     // Update with data
     await gapi.client.sheets.spreadsheets.values.update({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId,
       range: `${sheetInfo.name}!A${insertIndex}:C${insertIndex + rows.length - 1}`,
       valueInputOption: 'USER_ENTERED',
       resource: { values: rows },
     });
-  }, [accessToken, sheetInfo]);
+  }, [accessToken, userEmail, spreadsheetId, sheetInfo]);
 
   // Delete row from sheet
   const deleteRowFromSheet = useCallback(async (rowIndex: number) => {
-    if (!accessToken) return;
+    if (!accessToken || !spreadsheetId) return;
 
-    await initGapiClient(accessToken);
+    const gapi = await initGapiClient(accessToken);
     
     await gapi.client.sheets.spreadsheets.batchUpdate({
-      spreadsheetId: SPREADSHEET_ID,
+      spreadsheetId,
       resource: {
         requests: [{
           deleteDimension: {
@@ -112,15 +112,15 @@ export const useGoogleSheets = (accessToken: string | null) => {
         }],
       },
     });
-  }, [accessToken, sheetInfo]);
+  }, [accessToken, spreadsheetId, sheetInfo]);
 
   // Add new entry
   const addEntry = useCallback(async (newEntry: NewEntry) => {
-    if (!accessToken || !sheetInfo.name) return;
+    if (!accessToken || !userEmail || !sheetInfo.name) return;
 
     setIsOperationPending(true);
     try {
-      let rowsToAdd: any[][] = [];
+      let rowsToAdd: unknown[][] = [];
 
       if (newEntry.Activity === 'Sleep') {
         const endDateTime = new Date(newEntry.EndDateTime);
@@ -151,11 +151,11 @@ export const useGoogleSheets = (accessToken: string | null) => {
     } finally {
       setIsOperationPending(false);
     }
-  }, [accessToken, sheetInfo, findInsertIndex, insertRowsInSheet, loadData]);
+  }, [accessToken, userEmail, sheetInfo, findInsertIndex, insertRowsInSheet, loadData]);
 
   // Update existing entry
   const updateEntry = useCallback(async (editRowData: ActivityRow) => {
-    if (!accessToken || !sheetInfo.name) return;
+    if (!accessToken || !userEmail || !sheetInfo.name) return;
 
     setIsOperationPending(true);
     try {
@@ -203,11 +203,11 @@ export const useGoogleSheets = (accessToken: string | null) => {
     } finally {
       setIsOperationPending(false);
     }
-  }, [accessToken, sheetInfo, sheetData, deleteRowFromSheet, findInsertIndex, insertRowsInSheet, loadData]);
+  }, [accessToken, userEmail, sheetInfo, sheetData, deleteRowFromSheet, findInsertIndex, insertRowsInSheet, loadData]);
 
   // Delete entry
   const deleteEntry = useCallback(async (row: ActivityRow) => {
-    if (!accessToken || !sheetInfo.name) return;
+    if (!accessToken || !userEmail || !sheetInfo.name) return;
 
     setIsOperationPending(true);
     try {
@@ -231,7 +231,7 @@ export const useGoogleSheets = (accessToken: string | null) => {
     } finally {
       setIsOperationPending(false);
     }
-  }, [accessToken, sheetInfo, sheetData, deleteRowFromSheet, loadData]);
+  }, [accessToken, userEmail, sheetInfo, sheetData, deleteRowFromSheet, loadData]);
 
   return {
     sheetData,

@@ -1,5 +1,5 @@
 // src/components/Dashboard.tsx
-import React from 'react';
+import React, { memo } from 'react';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { activityConfig } from '../config/activityConfig';
 import type { ActivityRow } from '../types';
@@ -11,7 +11,7 @@ type DashboardProps = {
   selectedActivity: string;
   setSelectedActivity: (activity: string) => void;
   handleReset: () => void;
-  chartData: any[];
+  chartData: Record<string, unknown>[];
   tooltipFormatter: (value: number, name: string) => string[];
   dateFilteredData: ActivityRow[];
   editingRowIndex: number | null;
@@ -52,7 +52,7 @@ const renderEditableCell = (
   );
 };
 
-export const Dashboard: React.FC<DashboardProps> = ({
+export const Dashboard: React.FC<DashboardProps> = memo(({
   summary,
   dateRange,
   setDateRange,
@@ -242,4 +242,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
     </>
   );
-};
+});
+
+Dashboard.displayName = 'Dashboard';

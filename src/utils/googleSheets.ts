@@ -1,22 +1,25 @@
 // src/utils/googleSheets.ts
-import { gapi } from 'gapi-script';
+// Lazy load gapi-script to reduce initial bundle size
+const loadGapi = () => import('gapi-script').then(module => module.gapi);
 import { parseSheetData } from './dataProcessing';
 import { debugLog } from '../Debug';
-
-const SPREADSHEET_ID = import.meta.env.VITE_SHEET_ID;
+import { getUserSheetId } from './userSheetManager';
 
 // This helper function ensures the GAPI client is loaded and ready
 const initGapiClient = async (accessToken: string) => {
+  const gapi = await loadGapi();
   await new Promise<void>((resolve) => gapi.load('client', resolve));
   await gapi.client.init({});
   await gapi.client.load('sheets', 'v4');
   gapi.client.setToken({ access_token: accessToken });
+  return gapi;
 };
 
-export const fetchData = async (accessToken: string) => {
-  await initGapiClient(accessToken);
+export const fetchData = async (accessToken: string, userEmail: string) => {
+  const spreadsheetId = await getUserSheetId(accessToken, userEmail);
+  const gapi = await initGapiClient(accessToken);
   const metadataResponse = await gapi.client.sheets.spreadsheets.get({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId,
   });
   const firstSheet = metadataResponse.result.sheets?.[0];
   const firstSheetName = firstSheet?.properties?.title;
@@ -25,20 +28,22 @@ export const fetchData = async (accessToken: string) => {
   }
 
   const dataResponse = await gapi.client.sheets.spreadsheets.values.get({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId,
     range: firstSheetName,
   });
   
   const parsedData = parseSheetData(dataResponse.result.values || []);
-  return { data: parsedData, sheetName: firstSheetName, sheetId: firstSheet.properties.sheetId };
+  return { data: parsedData, sheetName: firstSheetName, sheetId: firstSheet.properties.sheetId, spreadsheetId };
 };
 
-export const updateRowInSheet = async (accessToken: string, sheetName: string, rowData: any, rowIndex: number) => {
-  await initGapiClient(accessToken);
+export const updateRowInSheet = async (accessToken: string, userEmail: string, sheetName: string, rowData: unknown, rowIndex: number) => {
+  const spreadsheetId = await getUserSheetId(accessToken, userEmail);
+  const gapi = await initGapiClient(accessToken);
   const range = `${sheetName}!A${rowIndex}:C${rowIndex}`;
-  const values = [[rowData.Date, rowData.Activity, rowData.Quantity]];
+  const data = rowData as { Date: string; Activity: string; Quantity: string };
+  const values = [[data.Date, data.Activity, data.Quantity]];
   await gapi.client.sheets.spreadsheets.values.update({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId,
     range: range,
     valueInputOption: 'USER_ENTERED',
     resource: { values: values },
@@ -46,12 +51,13 @@ export const updateRowInSheet = async (accessToken: string, sheetName: string, r
 };
 
 // MODIFIED FUNCTION: Now accepts an `insertIndex` to insert at any row
-export const insertRowsInSheet = async (accessToken: string, sheetName: string, sheetId: number, rows: any[][], insertIndex: number) => {
-    await initGapiClient(accessToken);
+export const insertRowsInSheet = async (accessToken: string, userEmail: string, sheetName: string, sheetId: number, rows: unknown[][], insertIndex: number) => {
+    const spreadsheetId = await getUserSheetId(accessToken, userEmail);
+    const gapi = await initGapiClient(accessToken);
 
     // 1. Insert the required number of empty rows at the target index
     await gapi.client.sheets.spreadsheets.batchUpdate({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId,
         resource: {
             requests: [
                 {
@@ -71,7 +77,7 @@ export const insertRowsInSheet = async (accessToken: string, sheetName: string, 
 
     // 2. Update the newly created empty rows with our data
     await gapi.client.sheets.spreadsheets.values.update({
-        spreadsheetId: SPREADSHEET_ID,
+        spreadsheetId,
         range: `${sheetName}!A${insertIndex}:C${insertIndex + rows.length - 1}`,
         valueInputOption: 'USER_ENTERED',
         resource: { values: rows },
@@ -80,13 +86,15 @@ export const insertRowsInSheet = async (accessToken: string, sheetName: string, 
 
 export const deleteRowInSheet = async (
   accessToken: string,
+  userEmail: string,
   sheetId: number,
   rowIndex: number
 ) => {
-debugLog("[DELETE] deleteRowInSheet called for row:", rowIndex);
-  await initGapiClient(accessToken);
+  const spreadsheetId = await getUserSheetId(accessToken, userEmail);
+  debugLog("[DELETE] deleteRowInSheet called for row:", rowIndex);
+  const gapi = await initGapiClient(accessToken);
   await gapi.client.sheets.spreadsheets.batchUpdate({
-    spreadsheetId: SPREADSHEET_ID,
+    spreadsheetId,
     resource: {
       requests: [
         {

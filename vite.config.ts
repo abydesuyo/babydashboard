@@ -1,8 +1,38 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { visualizer } from 'rollup-plugin-visualizer'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    visualizer({
+      filename: 'dist/stats.html',
+      open: true,
+      gzipSize: true,
+      brotliSize: true,
+    })
+  ],
   base: '/', // <-- Cloudflare Pages expects root
+  server: {
+    proxy: {
+      '/api': 'http://localhost:3001'
+    }
+  },
+  build: {
+    // Enable source maps for better debugging
+    sourcemap: false,
+    // Optimize chunk size
+    chunkSizeWarningLimit: 500,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Split vendor chunks
+          'react-vendor': ['react', 'react-dom'],
+          'charts': ['recharts'],
+          'google-apis': ['gapi-script', '@react-oauth/google']
+        }
+      }
+    }
+  }
 })

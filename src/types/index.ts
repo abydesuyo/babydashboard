@@ -24,4 +24,26 @@ export type NewEntry = {
 export type SheetInfo = {
   name: string;
   id: number;
+  spreadsheetId?: string;
+};
+
+export type UserSheetConfig = {
+  email: string;
+  spreadsheetId: string;
+  createdAt: string;
+};
+
+export type SavedSheet = {
+  id: string;
+  name: string;
+  spreadsheetId: string;
+  role: 'owner' | 'collaborator';
+  lastAccessed: string;
+  createdBy?: string;
+};
+
+export type SheetSelectorState = {
+  selectedSheetId: string | null;
+  availableSheets: SavedSheet[];
+  isSelectingSheet: boolean;
 };

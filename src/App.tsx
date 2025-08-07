@@ -1,10 +1,14 @@
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo, useCallback, lazy, Suspense } from 'react';
 import { useGoogleLogin, googleLogout } from '@react-oauth/google';
-import { Dashboard } from './components/Dashboard';
+import { SheetSelector } from './components/SheetSelector';
+
+// Lazy load heavy components to reduce initial bundle size
+const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
 import { useGoogleSheets } from './hooks/useGoogleSheets';
 import { useTokenManager } from './hooks/useTokenManager';
 import { calculateSummary, processDataForChart } from './utils/dataProcessing';
-import type { UserProfile, ActivityRow, NewEntry } from './types';
+import { clearUserSheetData, updateSheetAccess } from './utils/userSheetManager';
+import type { UserProfile, ActivityRow, NewEntry, SavedSheet } from './types';
 import './App.css';
 
 // Helper functions
@@ -46,15 +50,23 @@ function App() {
     const [isLoading, setIsLoading] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
     
+    // Sheet selection state
+    const [selectedSheet, setSelectedSheet] = useState<SavedSheet | null>(null);
+    const [showSheetSelector, setShowSheetSelector] = useState(false);
+    
     // Token management
     const { 
         accessToken, 
         isTokenValid, 
+        getTokenStatus,
         setTokenData, 
         clearToken 
     } = useTokenManager();
+
+    const tokenStatus = getTokenStatus();
     
-    // Google Sheets operations
+    // Google Sheets operations - only initialize if we have a selected sheet
+    const shouldInitializeSheets = accessToken && user?.email && selectedSheet;
     const { 
         sheetData, 
         loadData, 
@@ -62,7 +74,11 @@ function App() {
         updateEntry, 
         deleteEntry,
         isOperationPending 
-    } = useGoogleSheets(accessToken);
+    } = useGoogleSheets(
+        shouldInitializeSheets ? accessToken : null, 
+        shouldInitializeSheets ? user.email : null,
+        shouldInitializeSheets ? selectedSheet.spreadsheetId : null
+    );
 
     // UI state
     const [dateRange, setDateRange] = useState({ start: getMonthStart(), end: '' });
@@ -99,11 +115,18 @@ function App() {
         onError: (error) => console.error('Login error:', error),
     });
 
-    const logout = useCallback(() => {
+    const logout = useCallback(async () => {
         googleLogout();
+        if (user?.email) {
+            await clearUserSheetData(accessToken, user.email);
+        }
         setUser(null);
+        setSelectedSheet(null);
+        setShowSheetSelector(false);
         clearToken();
-    }, [clearToken]);
+        // Clear any stored refresh tokens
+        localStorage.removeItem('google_refresh_token');
+    }, [clearToken, user?.email, accessToken]);
 
     // Protected API call wrapper
     const makeProtectedCall = useCallback(async <T,>(
@@ -121,8 +144,8 @@ function App() {
 
         try {
             return await apiCall();
-        } catch (error: any) {
-            if (error?.status === 401) {
+        } catch (error: unknown) {
+            if ((error as { status?: number })?.status === 401) {
                 logout();
                 alert("Session expired. Please log in again.");
                 return null;
@@ -133,7 +156,7 @@ function App() {
 
     // Data operations
     const handleLoadData = useCallback(async (showLoadingSpinner = true) => {
-        if (!accessToken) return;
+        if (!accessToken || !selectedSheet) return;
         
         return makeProtectedCall(async () => {
             if (showLoadingSpinner) setIsLoading(true);
@@ -143,7 +166,7 @@ function App() {
                 if (showLoadingSpinner) setIsLoading(false);
             }
         });
-    }, [accessToken, loadData, makeProtectedCall]);
+    }, [accessToken, selectedSheet, loadData, makeProtectedCall]);
 
     const handleAddEntry = useCallback(async () => {
         if (!newEntry.DateTime || !newEntry.Activity) {
@@ -209,6 +232,22 @@ function App() {
     const handleNewEntryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setNewEntry(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
+    
+    // Sheet management handlers
+    const handleSheetSelected = useCallback((sheet: SavedSheet) => {
+        setSelectedSheet(sheet);
+        setShowSheetSelector(false);
+    }, []);
+    
+    const handleSwitchSheet = useCallback(() => {
+        setShowSheetSelector(true);
+    }, []);
+    
+    const handleCloseSheetSelector = useCallback(() => {
+        if (selectedSheet) {
+            setShowSheetSelector(false);
+        }
+    }, [selectedSheet]);
 
     // Effects
     useEffect(() => {
@@ -220,16 +259,24 @@ function App() {
         document.documentElement.setAttribute('data-theme', theme);
     }, [theme]);
 
-    // Load data when user logs in
+    // Show sheet selector when user logs in but hasn't selected a sheet
     useEffect(() => {
-        if (user && accessToken) {
+        if (user && accessToken && !selectedSheet) {
+            setShowSheetSelector(true);
+        }
+    }, [user, accessToken, selectedSheet]);
+    
+    // Load data when sheet is selected
+    useEffect(() => {
+        if (selectedSheet && accessToken && user) {
+            updateSheetAccess(accessToken, user.email, selectedSheet.id);
             handleLoadData();
         }
-    }, [user, accessToken, handleLoadData]);
+    }, [selectedSheet, accessToken, user, handleLoadData]);
 
     // Periodic data refresh
     useEffect(() => {
-        if (!accessToken || !user) return;
+        if (!accessToken || !user || !selectedSheet) return;
 
         const interval = setInterval(() => {
             if (isTokenValid()) {
@@ -238,7 +285,7 @@ function App() {
         }, 60000);
 
         return () => clearInterval(interval);
-    }, [accessToken, user, isTokenValid, handleLoadData]);
+    }, [accessToken, user, selectedSheet, isTokenValid, handleLoadData]);
 
     // Memoized calculations
     const dateFilteredData = useMemo(() => 
@@ -355,17 +402,51 @@ function App() {
                 ) : (
                     <>
                         <div className="user-info">
-                            <p>Welcome, {user.name}!</p>
+                            <div className="user-details">
+                                <p>Welcome, {user.name}!</p>
+                                {selectedSheet && (
+                                    <p className="sheet-info">
+                                        Current sheet: <strong>{selectedSheet.name}</strong>
+                                        <button 
+                                            onClick={handleSwitchSheet}
+                                            className="switch-sheet-button"
+                                            title="Switch to a different sheet"
+                                        >
+                                            Switch Sheet
+                                        </button>
+                                    </p>
+                                )}
+                            </div>
                             <button onClick={logout} className="logout-button">
                                 Logout
                             </button>
                         </div>
 
-                        {isLoading && sheetData.length === 0 && (
-                            <div className="loading-container">
-                                <p>Loading...</p>
+                        {tokenStatus.isExpiringSoon && (
+                            <div className="token-warning">
+                                ⏰ Session expires in {tokenStatus.minutesUntilExpiry} minute{tokenStatus.minutesUntilExpiry !== 1 ? 's' : ''}. 
+                                <button onClick={() => login()} className="refresh-button">
+                                    Refresh Session
+                                </button>
                             </div>
                         )}
+
+                        {showSheetSelector && (
+                            <SheetSelector
+                                accessToken={accessToken!}
+                                userEmail={user.email}
+                                onSheetSelected={handleSheetSelected}
+                                onClose={handleCloseSheetSelector}
+                            />
+                        )}
+
+                        {!showSheetSelector && selectedSheet && (
+                            <>
+                                {isLoading && sheetData.length === 0 && (
+                                    <div className="loading-container">
+                                        <p>Loading...</p>
+                                    </div>
+                                )}
 
                         {(!isLoading || sheetData.length > 0) && (
                             <>
@@ -419,26 +500,34 @@ function App() {
                                     </div>
                                 )}
 
-                                <Dashboard
-                                    summary={summary}
-                                    dateRange={dateRange}
-                                    setDateRange={setDateRange}
-                                    selectedActivity={selectedActivity}
-                                    setSelectedActivity={setSelectedActivity}
-                                    handleReset={handleReset}
-                                    chartData={chartData}
-                                    tooltipFormatter={tooltipFormatter}
-                                    dateFilteredData={dateFilteredData}
-                                    editingRowIndex={editingRowIndex}
-                                    editRowData={editRowData}
-                                    handleEditClick={handleEditClick}
-                                    handleSaveClick={handleSaveEdit}
-                                    handleCancelClick={handleCancelEdit}
-                                    handleDeleteClick={handleDeleteEntry}
-                                    handleEditChange={handleEditChange}
-                                    isOperationPending={isOperationPending}
-                                />
+                                <Suspense fallback={
+                                    <div className="loading-container">
+                                        <div className="loading-spinner">Loading dashboard...</div>
+                                    </div>
+                                }>
+                                    <Dashboard
+                                        summary={summary}
+                                        dateRange={dateRange}
+                                        setDateRange={setDateRange}
+                                        selectedActivity={selectedActivity}
+                                        setSelectedActivity={setSelectedActivity}
+                                        handleReset={handleReset}
+                                        chartData={chartData}
+                                        tooltipFormatter={tooltipFormatter}
+                                        dateFilteredData={dateFilteredData}
+                                        editingRowIndex={editingRowIndex}
+                                        editRowData={editRowData}
+                                        handleEditClick={handleEditClick}
+                                        handleSaveClick={handleSaveEdit}
+                                        handleCancelClick={handleCancelEdit}
+                                        handleDeleteClick={handleDeleteEntry}
+                                        handleEditChange={handleEditChange}
+                                        isOperationPending={isOperationPending}
+                                    />
+                                </Suspense>
                             </>
+                        )}
+                        </>
                         )}
                     </>
                 )}

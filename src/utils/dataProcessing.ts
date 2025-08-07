@@ -1,13 +1,13 @@
 // src/utils/dataProcessing.ts
 import type { ActivityRow } from '../types';
 
-export const parseSheetData = (values: any[][]): ActivityRow[] => {
+export const parseSheetData = (values: unknown[][]): ActivityRow[] => {
   if (!values || values.length < 2) return [];
   
   return values.slice(1).map((row, i) => ({
-    Date: row[0] || '',
-    Activity: row[1] || '',
-    Quantity: row[2] || '',
+    Date: String((row as unknown[])[0] || ''),
+    Activity: String((row as unknown[])[1] || ''),
+    Quantity: String((row as unknown[])[2] || ''),
     sheetRowIndex: i + 2,
     originalIndex: (i + 2).toString(),
   }));
