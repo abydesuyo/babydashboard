@@ -1,7 +1,7 @@
 // API client for Baby Dashboard backend
 import type { SavedSheet } from '../types';
 
-// For Cloudflare Pages, API functions are served from the same domain
+// API URL - can be same domain for dev, separate domain for production
 const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 class ApiError extends Error {
@@ -121,7 +121,7 @@ export class ApiClient {
   // Health check
   async healthCheck(): Promise<{ status: string; environment?: string; timestamp?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/health`);
+      const response = await fetch(`${API_BASE_URL}/health`);
       if (!response.ok) {
         throw new ApiError('Health check failed', response.status);
       }
