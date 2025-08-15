@@ -3,6 +3,8 @@ import React, { useState, useEffect, useCallback, memo } from 'react';
 import { 
   getSavedSheets, 
   createNewSheet, 
+  createSheetFromTemplate,
+  getTemplateInfo,
   joinExistingSheet, 
   removeSheet,
   migrateLegacySheets,
@@ -27,13 +29,16 @@ export const SheetSelector: React.FC<SheetSelectorProps> = memo(({
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [showJoinForm, setShowJoinForm] = useState(false);
+  const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [newSheetName, setNewSheetName] = useState('');
+  const [templateSheetName, setTemplateSheetName] = useState('');
   const [joinSheetId, setJoinSheetId] = useState('');
   const [joinSheetName, setJoinSheetName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [templateInfo, setTemplateInfo] = useState<{ name: string; description: string } | null>(null);
 
   // Parse Google Sheets URL to extract ID
   const parseGoogleSheetsUrl = (input: string): string => {
@@ -110,6 +115,21 @@ export const SheetSelector: React.FC<SheetSelectorProps> = memo(({
     loadSheets();
   }, [loadSheets]);
 
+  // Load template info when component mounts
+  useEffect(() => {
+    const loadTemplateInfo = async () => {
+      try {
+        const info = await getTemplateInfo(accessToken);
+        setTemplateInfo(info);
+      } catch (error) {
+        console.log('Template not available:', error);
+        setTemplateInfo(null);
+      }
+    };
+    
+    loadTemplateInfo();
+  }, [accessToken]);
+
   const handleCreateSheet = async () => {
     if (!newSheetName.trim()) {
       setError('Please enter a sheet name');
@@ -170,6 +190,30 @@ export const SheetSelector: React.FC<SheetSelectorProps> = memo(({
     } catch (error) {
       console.error('Failed to join sheet:', error);
       setError('Failed to join sheet. Please check the sheet ID and try again.');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleCreateFromTemplate = async () => {
+    if (!templateSheetName.trim()) {
+      setError('Please enter a sheet name');
+      return;
+    }
+
+    setIsCreating(true);
+    setError(null);
+
+    try {
+      const newSheet = await createSheetFromTemplate(accessToken, userEmail, templateSheetName.trim());
+      setSheets(prev => [newSheet, ...prev]);
+      setTemplateSheetName('');
+      setShowTemplateForm(false);
+      showSuccessMessage(`Template sheet "${newSheet.name}" created successfully with Apps Script backend!`);
+      onSheetSelected(newSheet);
+    } catch (error) {
+      console.error('Failed to create template sheet:', error);
+      setError('Failed to create template sheet. Please try again or contact support.');
     } finally {
       setIsCreating(false);
     }
@@ -267,8 +311,17 @@ export const SheetSelector: React.FC<SheetSelectorProps> = memo(({
         )}
 
         <div className="sheet-actions-section">
-          {!showCreateForm && !showJoinForm && (
+          {!showCreateForm && !showJoinForm && !showTemplateForm && (
             <div className="action-buttons">
+              {templateInfo && (
+                <button 
+                  onClick={() => setShowTemplateForm(true)}
+                  className="template-button"
+                  style={{ backgroundColor: '#10B981', borderColor: '#10B981' }}
+                >
+                  🚀 Create from Template
+                </button>
+              )}
               <button 
                 onClick={() => setShowCreateForm(true)}
                 className="create-button"
@@ -362,9 +415,58 @@ export const SheetSelector: React.FC<SheetSelectorProps> = memo(({
               </div>
             </div>
           )}
+
+          {showTemplateForm && (
+            <div className="template-form">
+              <h3>🚀 Create from Template</h3>
+              <div className="template-preview">
+                <div className="template-benefits">
+                  <h4>✨ What's included:</h4>
+                  <ul>
+                    <li>📊 <strong>Pre-built formulas</strong> - Automatic daily totals and averages</li>
+                    <li>⚡ <strong>Apps Script backend</strong> - Web app endpoints for integrations</li>
+                    <li>🔄 <strong>Auto-calculations</strong> - Sleep duration computed automatically</li>
+                    <li>📈 <strong>Ready-to-use charts</strong> - Visual insights from day one</li>
+                    <li>🎯 <strong>Smart triggers</strong> - Real-time data processing</li>
+                  </ul>
+                </div>
+                <div className="template-info">
+                  <p><strong>Template:</strong> {templateInfo?.name || 'Baby Dashboard Template'}</p>
+                  <p><small>{templateInfo?.description || 'Complete baby activity tracking with advanced features'}</small></p>
+                </div>
+              </div>
+              <input
+                type="text"
+                placeholder="Sheet name (e.g., 'Emma Dashboard - Advanced')"
+                value={templateSheetName}
+                onChange={(e) => setTemplateSheetName(e.target.value)}
+                maxLength={100}
+              />
+              <div className="form-actions">
+                <button 
+                  onClick={handleCreateFromTemplate}
+                  disabled={isCreating}
+                  className="template-button"
+                  style={{ backgroundColor: '#10B981', borderColor: '#10B981' }}
+                >
+                  {isCreating ? 'Creating...' : 'Create from Template'}
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowTemplateForm(false);
+                    setTemplateSheetName('');
+                    setError(null);
+                  }}
+                  className="cancel-button"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
-        {sheets.length === 0 && !showCreateForm && !showJoinForm && (
+        {sheets.length === 0 && !showCreateForm && !showJoinForm && !showTemplateForm && (
           <div className="empty-state">
             <div className="empty-state-icon">📊</div>
             <h3>Welcome to Baby Activity Dashboard!</h3>

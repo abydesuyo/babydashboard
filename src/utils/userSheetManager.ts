@@ -7,12 +7,13 @@ import type { UserSheetConfig, SavedSheet } from '../types';
 const USER_SHEETS_STORAGE_KEY = 'baby-dashboard-user-sheets';
 const SAVED_SHEETS_STORAGE_KEY = 'baby-dashboard-saved-sheets';
 
-// Initialize GAPI client helper
+// Initialize GAPI client helper with Drive API support
 const initGapiClient = async (accessToken: string) => {
   const gapi = await loadGapi();
   await new Promise<void>((resolve) => gapi.load('client', resolve));
   await gapi.client.init({});
   await gapi.client.load('sheets', 'v4');
+  await gapi.client.load('drive', 'v3');
   gapi.client.setToken({ access_token: accessToken });
   return gapi;
 };
@@ -390,4 +391,74 @@ export const getUserSheetId = async (accessToken: string, userEmail: string): Pr
   // Create a new default sheet
   const newSheet = await createNewSheet(accessToken, userEmail, `Baby Dashboard - ${userEmail}`);
   return newSheet.spreadsheetId;
+};
+
+// =============================================================================
+// TEMPLATE SHEET OPERATIONS
+// =============================================================================
+
+// Template sheet ID - this should be a publicly accessible sheet with all the Apps Script code
+// For now, we'll make this configurable, but in production this would be a specific template ID
+const TEMPLATE_SHEET_ID = import.meta.env.VITE_TEMPLATE_SHEET_ID || '';
+
+// Create a new sheet from template (with Apps Script code included)
+export const createSheetFromTemplate = async (accessToken: string, userEmail: string, sheetName: string, templateId?: string): Promise<SavedSheet> => {
+  const gapi = await initGapiClient(accessToken);
+  const actualTemplateId = templateId || TEMPLATE_SHEET_ID;
+  
+  if (!actualTemplateId) {
+    throw new Error('Template sheet ID not configured. Please contact support.');
+  }
+  
+  // Copy the template sheet using Drive API
+  const copyResponse = await gapi.client.drive.files.copy({
+    fileId: actualTemplateId,
+    resource: {
+      name: sheetName,
+      parents: [] // This will put it in the user's root Drive folder
+    }
+  });
+  
+  const newSpreadsheetId = copyResponse.result.id!;
+  
+  // Create saved sheet entry
+  const savedSheet: SavedSheet = {
+    id: `${userEmail}-template-${Date.now()}`,
+    name: sheetName,
+    spreadsheetId: newSpreadsheetId,
+    role: 'owner',
+    lastAccessed: new Date().toISOString(),
+    createdBy: userEmail
+  };
+  
+  // Save to both API and localStorage
+  await saveSheet(accessToken, userEmail, savedSheet);
+  
+  return savedSheet;
+};
+
+// Get template information (for preview purposes)
+export const getTemplateInfo = async (accessToken: string, templateId?: string): Promise<{ name: string; description: string } | null> => {
+  try {
+    const gapi = await initGapiClient(accessToken);
+    const actualTemplateId = templateId || TEMPLATE_SHEET_ID;
+    
+    if (!actualTemplateId) {
+      return null;
+    }
+    
+    // Get template metadata
+    const response = await gapi.client.drive.files.get({
+      fileId: actualTemplateId,
+      fields: 'name, description'
+    });
+    
+    return {
+      name: response.result.name || 'Baby Dashboard Template',
+      description: response.result.description || 'Complete baby activity dashboard with formulas and Apps Script backend'
+    };
+  } catch (error) {
+    console.error('Failed to get template info:', error);
+    return null;
+  }
 };

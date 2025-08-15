@@ -161,11 +161,40 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
     try {
       // Handle sleep entries specially
       if (editRowData.Activity === 'SleepStarted' || editRowData.Activity === 'SleepEnded') {
-        // Delete related sleep rows
-        const relatedRows = sheetData.filter(row =>
-          (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') &&
-          new Date(row.Date).toDateString() === new Date(editRowData.Date).toDateString()
-        );
+        // Find the specific sleep session being edited
+        // For SleepEnded: find the corresponding SleepStarted before it
+        // For SleepStarted: find the corresponding SleepEnded after it
+        let relatedRows: ActivityRow[] = [];
+        
+        if (editRowData.Activity === 'SleepEnded') {
+          // Find the matching SleepStarted entry that comes before this SleepEnded
+          const sleepStarted = sheetData
+            .filter(row => row.Activity === 'SleepStarted')
+            .find(row => {
+              const startTime = new Date(row.Date).getTime();
+              const endTime = new Date(editRowData.Date).getTime();
+              return startTime <= endTime;
+            });
+          
+          relatedRows = [editRowData];
+          if (sleepStarted) {
+            relatedRows.push(sleepStarted);
+          }
+        } else if (editRowData.Activity === 'SleepStarted') {
+          // Find the matching SleepEnded entry that comes after this SleepStarted
+          const sleepEnded = sheetData
+            .filter(row => row.Activity === 'SleepEnded')
+            .find(row => {
+              const startTime = new Date(editRowData.Date).getTime();
+              const endTime = new Date(row.Date).getTime();
+              return endTime >= startTime;
+            });
+          
+          relatedRows = [editRowData];
+          if (sleepEnded) {
+            relatedRows.push(sleepEnded);
+          }
+        }
 
         for (const row of relatedRows.sort((a, b) => b.sheetRowIndex - a.sheetRowIndex)) {
           await deleteRowFromSheet(row.sheetRowIndex);
@@ -220,11 +249,38 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
     setIsOperationPending(true);
     try {
       if (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') {
-        // Delete all related sleep rows for the same date
-        const relatedRows = sheetData.filter(r =>
-          (r.Activity === 'SleepStarted' || r.Activity === 'SleepEnded') &&
-          new Date(r.Date).toDateString() === new Date(row.Date).toDateString()
-        );
+        // Find the specific sleep session being deleted
+        let relatedRows: ActivityRow[] = [];
+        
+        if (row.Activity === 'SleepEnded') {
+          // Find the matching SleepStarted entry that comes before this SleepEnded
+          const sleepStarted = sheetData
+            .filter(r => r.Activity === 'SleepStarted')
+            .find(r => {
+              const startTime = new Date(r.Date).getTime();
+              const endTime = new Date(row.Date).getTime();
+              return startTime <= endTime;
+            });
+          
+          relatedRows = [row];
+          if (sleepStarted) {
+            relatedRows.push(sleepStarted);
+          }
+        } else if (row.Activity === 'SleepStarted') {
+          // Find the matching SleepEnded entry that comes after this SleepStarted
+          const sleepEnded = sheetData
+            .filter(r => r.Activity === 'SleepEnded')
+            .find(r => {
+              const startTime = new Date(row.Date).getTime();
+              const endTime = new Date(r.Date).getTime();
+              return endTime >= startTime;
+            });
+          
+          relatedRows = [row];
+          if (sleepEnded) {
+            relatedRows.push(sleepEnded);
+          }
+        }
 
         // Delete in reverse order to maintain row indices
         for (const r of relatedRows.sort((a, b) => b.sheetRowIndex - a.sheetRowIndex)) {

@@ -923,6 +923,86 @@ th {
     color: white;
 }
 
+/* Template Form Styles */
+.template-form {
+    background: var(--surface);
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    margin-top: 20px;
+}
+
+.template-form h3 {
+    margin: 0 0 15px 0;
+    color: #10B981;
+}
+
+.template-preview {
+    background: #f0fdf4;
+    border: 1px solid #10B981;
+    border-radius: 6px;
+    padding: 15px;
+    margin-bottom: 15px;
+}
+
+.template-benefits {
+    margin-bottom: 15px;
+}
+
+.template-benefits h4 {
+    margin: 0 0 8px 0;
+    color: #059669;
+    font-size: 0.9rem;
+}
+
+.template-benefits ul {
+    margin: 0;
+    padding-left: 20px;
+    list-style-type: none;
+}
+
+.template-benefits li {
+    margin: 6px 0;
+    font-size: 0.85rem;
+    position: relative;
+}
+
+.template-benefits li::before {
+    content: "✅";
+    position: absolute;
+    left: -20px;
+}
+
+.template-info {
+    padding-top: 10px;
+    border-top: 1px solid #d1fae5;
+}
+
+.template-info p {
+    margin: 4px 0;
+    font-size: 0.9rem;
+}
+
+.template-info small {
+    color: #6b7280;
+}
+
+.template-button {
+    background: #10B981 !important;
+    border-color: #10B981 !important;
+    color: white !important;
+}
+
+.template-button:hover {
+    background: #059669 !important;
+    border-color: #059669 !important;
+}
+
+.template-button:disabled {
+    background: #9CA3AF !important;
+    border-color: #9CA3AF !important;
+}
+
 @media (max-width: 768px) {
     .user-info {
         flex-direction: column;
@@ -934,5 +1014,13 @@ th {
         flex-direction: column;
         align-items: flex-start;
         gap: 5px;
+    }
+
+    .template-preview {
+        padding: 12px;
+    }
+    
+    .template-benefits li {
+        font-size: 0.8rem;
     }
 }

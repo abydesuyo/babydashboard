@@ -97,7 +97,7 @@ function App() {
 
     // Authentication
     const login = useGoogleLogin({
-        scope: 'https://www.googleapis.com/auth/spreadsheets',
+        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file',
         onSuccess: async (response) => {
             const { access_token, expires_in } = response;
             setTokenData(access_token, expires_in || 3600);
@@ -179,13 +179,7 @@ function App() {
             setShowAddSuccess(true);
             setTimeout(() => setShowAddSuccess(false), 2000);
             
-            // Reset form
-            setNewEntry({
-                DateTime: getCurrentDateTimeLocal(),
-                Activity: 'Formula',
-                Quantity: '',
-                EndDateTime: getCurrentDateTimeLocal()
-            });
+            // Keep all values including times - preserve everything for continuous entries
         });
     }, [newEntry, addEntry, makeProtectedCall]);
 
@@ -217,7 +211,31 @@ function App() {
 
     const handleEditClick = (row: ActivityRow, index: number) => {
         setEditingRowIndex(index);
-        setEditRowData({ ...row });
+        
+        // For sleep entries, find the matching start/end time
+        if (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') {
+            let endDateTime = '';
+            
+            if (row.Activity === 'SleepStarted') {
+                // Find the corresponding SleepEnded entry
+                const sleepEnded = sheetData
+                    .filter(r => r.Activity === 'SleepEnded')
+                    .find(r => {
+                        const startTime = new Date(row.Date).getTime();
+                        const endTime = new Date(r.Date).getTime();
+                        return endTime >= startTime;
+                    });
+                
+                endDateTime = sleepEnded ? sleepEnded.Date : '';
+            } else {
+                // For SleepEnded, the end time is the current row's date
+                endDateTime = row.Date;
+            }
+            
+            setEditRowData({ ...row, EndDateTime: endDateTime });
+        } else {
+            setEditRowData({ ...row });
+        }
     };
 
     const handleCancelEdit = () => {

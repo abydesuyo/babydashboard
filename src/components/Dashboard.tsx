@@ -193,7 +193,26 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
                     {renderEditableCell(row.Activity, 'Activity', isEditing, editRowData, handleEditChange)}
                   </td>
                   <td>
-                    {renderEditableCell(row.Quantity, 'Quantity', isEditing, editRowData, handleEditChange)}
+                    {isEditing && (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                        <input 
+                          type="text"
+                          placeholder="Duration (minutes)"
+                          value={editRowData?.Quantity || ''}
+                          onChange={(e) => handleEditChange(e, 'Quantity')}
+                          style={{ width: '100%' }}
+                        />
+                        <input
+                          type="datetime-local"
+                          placeholder="End time"
+                          value={editRowData?.EndDateTime?.replace(' ', 'T').slice(0, 16) || ''}
+                          onChange={(e) => handleEditChange(e, 'EndDateTime')}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    ) : (
+                      renderEditableCell(row.Quantity, 'Quantity', isEditing, editRowData, handleEditChange)
+                    )}
                   </td>
                   <td>
                     {row.Activity === 'Formula' ? 'ml' : 
