@@ -1,5 +1,5 @@
 // Cloudflare Pages Function - GET /api/health
-import * as Realm from "realm-web";
+import { MongoClient } from "mongodb";
 
 // CORS headers
 const corsHeaders = {
@@ -32,11 +32,12 @@ export async function onRequest(context) {
     let mongoError = null;
     
     try {
-      if (env.MONGODB_APP_ID && env.MONGODB_API_KEY) {
-        const app = new Realm.App({ id: env.MONGODB_APP_ID });
-        const credentials = Realm.Credentials.apiKey(env.MONGODB_API_KEY);
-        const user = await app.logIn(credentials);
-        mongoStatus = user ? 'connected' : 'authentication_failed';
+      if (env.MONGODB_URI) {
+        const client = new MongoClient(env.MONGODB_URI);
+        await client.connect();
+        await client.db('baby-dashboard').admin().ping();
+        mongoStatus = 'connected';
+        await client.close();
       } else {
         mongoStatus = 'not_configured';
       }
