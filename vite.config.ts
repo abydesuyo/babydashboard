@@ -25,6 +25,8 @@ export default defineConfig({
     // Optimize chunk size
     chunkSizeWarningLimit: 500,
     rollupOptions: {
+      // Exclude server-only dependencies from frontend bundle
+      external: ['mongodb', 'realm-web'],
       output: {
         manualChunks: {
           // Split vendor chunks
