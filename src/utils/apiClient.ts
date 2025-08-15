@@ -1,7 +1,7 @@
 // API client for Baby Dashboard backend
 import type { SavedSheet } from '../types';
 
-// API URL - can be same domain for dev, separate domain for production
+// API URL - for Cloudflare Pages, use same domain in production, localhost for dev
 const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
 
 class ApiError extends Error {

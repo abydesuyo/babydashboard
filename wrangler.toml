@@ -1,0 +1,6 @@
+name = "baby-dashboard"
+compatibility_date = "2024-01-01"
+
+# Simple Cloudflare Pages configuration without MongoDB for now
+[env.production]
+compatibility_date = "2024-01-01"
