@@ -1,5 +1,5 @@
 // Cloudflare Pages Function - GET /api/test (Development/Testing Only)
-import * as Realm from "realm-web";
+import { MongoClient } from "mongodb";
 
 // CORS headers
 const corsHeaders = {
@@ -34,56 +34,50 @@ export async function onRequest(context) {
   // Test 1: Environment variables
   testResults.tests.push({
     name: 'Environment Variables',
-    status: env.MONGODB_APP_ID && env.MONGODB_API_KEY ? 'PASS' : 'FAIL',
+    status: env.MONGODB_URI ? 'PASS' : 'FAIL',
     details: {
-      mongodb_app_id: env.MONGODB_APP_ID ? 'Set' : 'Missing',
-      mongodb_api_key: env.MONGODB_API_KEY ? 'Set' : 'Missing'
+      mongodb_uri: env.MONGODB_URI ? 'Set' : 'Missing'
     }
   });
 
-  // Test 2: Realm SDK Import
-  let realmSdkStatus = 'PASS';
-  let realmSdkError = null;
+  // Test 2: MongoDB SDK Import
+  let mongoSdkStatus = 'PASS';
+  let mongoSdkError = null;
   try {
-    const testApp = new Realm.App({ id: 'test-app-id' });
+    // Test if we can create a MongoClient instance
+    new MongoClient('mongodb://test');
     // If we get here, the SDK loaded successfully
   } catch (error) {
-    realmSdkStatus = 'FAIL';
-    realmSdkError = error.message;
+    mongoSdkStatus = 'FAIL';
+    mongoSdkError = error.message;
   }
   
   testResults.tests.push({
-    name: 'Realm SDK Import',
-    status: realmSdkStatus,
-    error: realmSdkError
+    name: 'MongoDB SDK Import',
+    status: mongoSdkStatus,
+    error: mongoSdkError
   });
 
   // Test 3: MongoDB Connection (if credentials are available)
-  if (env.MONGODB_APP_ID && env.MONGODB_API_KEY) {
+  if (env.MONGODB_URI) {
     let mongoStatus = 'PASS';
     let mongoError = null;
     let connectionDetails = null;
 
     try {
-      const app = new Realm.App({ id: env.MONGODB_APP_ID });
-      const credentials = Realm.Credentials.apiKey(env.MONGODB_API_KEY);
-      const user = await app.logIn(credentials);
+      const client = new MongoClient(env.MONGODB_URI);
+      await client.connect();
+      const db = client.db("baby-dashboard");
       
-      if (user && user.mongoClient) {
-        const mongo = user.mongoClient("mongodb-atlas");
-        const db = mongo.db("baby-dashboard");
-        
-        // Test basic database access
-        const testCollection = db.collection("test");
-        connectionDetails = {
-          userId: user.id,
-          isLoggedIn: user.isLoggedIn,
-          mongoClientAvailable: !!user.mongoClient
-        };
-      } else {
-        mongoStatus = 'FAIL';
-        mongoError = 'Failed to get MongoDB client';
-      }
+      // Test basic database access
+      await db.admin().ping();
+      
+      connectionDetails = {
+        connected: true,
+        databaseName: db.databaseName
+      };
+      
+      await client.close();
     } catch (error) {
       mongoStatus = 'FAIL';
       mongoError = error.message;
@@ -99,7 +93,7 @@ export async function onRequest(context) {
     testResults.tests.push({
       name: 'MongoDB Atlas Connection',
       status: 'SKIPPED',
-      reason: 'Missing environment variables'
+      reason: 'Missing MONGODB_URI environment variable'
     });
   }
 

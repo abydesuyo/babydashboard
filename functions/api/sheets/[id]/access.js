@@ -1,5 +1,5 @@
 // Cloudflare Pages Function - PUT /api/sheets/[id]/access
-import * as Realm from "realm-web";
+import { MongoClient } from "mongodb";
 
 // CORS headers
 const corsHeaders = {
@@ -25,13 +25,12 @@ async function verifyGoogleToken(token) {
 
 // Initialize MongoDB connection
 async function initMongoDB(context) {
-  const app = new Realm.App({ id: context.env.MONGODB_APP_ID });
-  const credentials = Realm.Credentials.apiKey(context.env.MONGODB_API_KEY);
-  const user = await app.logIn(credentials);
-  const mongo = user.mongoClient("mongodb-atlas");
-  const db = mongo.db("baby-dashboard");
+  const client = new MongoClient(context.env.MONGODB_URI);
+  await client.connect();
+  const db = client.db("baby-dashboard");
   
   return {
+    client,
     userSheets: db.collection("user_sheets")
   };
 }
@@ -81,9 +80,10 @@ export async function onRequest(context) {
     });
   }
 
+  let collections = null;
   try {
     // Initialize MongoDB connection
-    const collections = await initMongoDB(context);
+    collections = await initMongoDB(context);
     const { userSheets } = collections;
     
     // Update last accessed time
@@ -101,5 +101,10 @@ export async function onRequest(context) {
       status: 500,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
+  } finally {
+    // Close MongoDB connection
+    if (collections?.client) {
+      await collections.client.close();
+    }
   }
 }
