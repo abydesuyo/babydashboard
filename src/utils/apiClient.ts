@@ -121,7 +121,7 @@ export class ApiClient {
   // Health check
   async healthCheck(): Promise<{ status: string; environment?: string; timestamp?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health`);
+      const response = await fetch(`${API_BASE_URL}/api/health`);
       if (!response.ok) {
         throw new ApiError('Health check failed', response.status);
       }
