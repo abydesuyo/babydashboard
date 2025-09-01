@@ -1,4 +1,30 @@
 // Cloudflare Pages Function - /api/sheets/[id]/access
+import { MongoClient } from 'mongodb';
+
+let cachedClient = null;
+let cachedDb = null;
+
+async function connectToDatabase() {
+  if (cachedClient && cachedDb) {
+    return { client: cachedClient, db: cachedDb };
+  }
+
+  const client = new MongoClient(process.env.MONGODB_URI);
+  
+  try {
+    await client.connect();
+    const db = client.db('baby-dashboard');
+    
+    cachedClient = client;
+    cachedDb = db;
+    
+    return { client, db };
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    throw new Error('Database connection failed');
+  }
+}
+
 export async function onRequest(context) {
   const { request, params } = context;
   
@@ -27,10 +53,31 @@ export async function onRequest(context) {
   
   try {
     if (request.method === 'PUT') {
-      // For now, just return success - we'll integrate MongoDB later
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json', ...corsHeaders }
-      });
+      try {
+        const { db } = await connectToDatabase();
+        
+        const result = await db.collection('user_sheets').updateOne(
+          { userEmail, sheetId },
+          { $set: { lastAccessed: new Date() } }
+        );
+
+        if (result.matchedCount === 0) {
+          return new Response(JSON.stringify({ error: 'Sheet not found' }), {
+            status: 404,
+            headers: { 'Content-Type': 'application/json', ...corsHeaders }
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      } catch (dbError) {
+        console.error('Database update error:', dbError);
+        return new Response(JSON.stringify({ error: 'Failed to update sheet access' }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json', ...corsHeaders }
+        });
+      }
     }
 
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -38,8 +85,9 @@ export async function onRequest(context) {
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   } catch (error) {
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500,
+    console.error('Request error:', error);
+    return new Response(JSON.stringify({ error: 'Service temporarily unavailable' }), {
+      status: 503,
       headers: { 'Content-Type': 'application/json', ...corsHeaders }
     });
   }

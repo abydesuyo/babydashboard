@@ -106,9 +106,18 @@ const removeSheetLocal = (userEmail: string, sheetId: string) => {
 // Get saved sheets for current user (API first, localStorage fallback)
 export const getSavedSheets = async (accessToken: string, userEmail: string): Promise<SavedSheet[]> => {
   try {
-    // Try API first
+    // Try API first with timeout to prevent hanging promises
     const apiClient = getApiClient(accessToken, userEmail);
-    const sheets = await apiClient.getUserSheets();
+    
+    // Add timeout to prevent hanging promises
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(() => reject(new Error('API request timeout')), 10000);
+    });
+    
+    const sheets = await Promise.race([
+      apiClient.getUserSheets(),
+      timeoutPromise
+    ]);
     
     // Sync to localStorage for offline access
     try {
@@ -119,7 +128,7 @@ export const getSavedSheets = async (accessToken: string, userEmail: string): Pr
     
     return sheets;
   } catch (apiError) {
-    // API unavailable (expected in local dev), falling back to localStorage silently
+    console.log('API unavailable, falling back to localStorage:', apiError.message);
     
     // Fallback to localStorage
     const localSheets = getSavedSheetsLocal(userEmail);

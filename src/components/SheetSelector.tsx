@@ -81,27 +81,35 @@ export const SheetSelector: React.FC<SheetSelectorProps> = memo(({
       setSheets(userSheets);
       
       // Background verification - remove inaccessible sheets
-      setTimeout(async () => {
-        const verifiedSheets: SavedSheet[] = [];
-        for (const sheet of userSheets) {
-          try {
-            const isAccessible = await verifySheetAccess(accessToken, sheet.spreadsheetId);
-            if (isAccessible) {
+      // Wrap in Promise to properly handle async operations
+      Promise.resolve().then(async () => {
+        try {
+          const verifiedSheets: SavedSheet[] = [];
+          for (const sheet of userSheets) {
+            try {
+              const isAccessible = await verifySheetAccess(accessToken, sheet.spreadsheetId);
+              if (isAccessible) {
+                verifiedSheets.push(sheet);
+              } else {
+                await removeSheet(accessToken, userEmail, sheet.id);
+              }
+            } catch (error) {
+              // Keep sheet if verification fails (might be network issue)
               verifiedSheets.push(sheet);
-            } else {
-              await removeSheet(accessToken, userEmail, sheet.id);
             }
-          } catch (error) {
-            // Keep sheet if verification fails (might be network issue)
-            verifiedSheets.push(sheet);
           }
+          
+          // Update sheets if any were removed
+          if (verifiedSheets.length !== userSheets.length) {
+            setSheets(verifiedSheets);
+          }
+        } catch (error) {
+          console.warn('Background sheet verification failed:', error);
+          // Don't update sheets if verification fails entirely
         }
-        
-        // Update sheets if any were removed
-        if (verifiedSheets.length !== userSheets.length) {
-          setSheets(verifiedSheets);
-        }
-      }, 100);
+      }).catch(error => {
+        console.warn('Background sheet verification promise rejected:', error);
+      });
       
     } catch (error) {
       console.error('Failed to load sheets:', error);
