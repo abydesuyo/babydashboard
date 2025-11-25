@@ -1,15 +1,18 @@
-import { json, corsHeaders } from './_shared/database.js';
+import { connectToDatabase, json, corsHeaders } from './_shared/database.js';
 
 // Cloudflare Pages Function - GET /health
 export async function onRequestOptions() {
   return new Response(null, { headers: corsHeaders });
 }
 
-export async function onRequestGet() {
+export async function onRequestGet({ env }) {
   try {
-    // Simple health check
+    // Check database connection
+    await connectToDatabase(env);
+
     return json({
       status: 'healthy',
+      database: 'connected',
       runtime: 'cloudflare-pages',
       timestamp: new Date().toISOString()
     });

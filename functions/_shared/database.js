@@ -4,7 +4,7 @@ import { MongoClient } from 'mongodb';
 let cachedClient = null;
 let cachedDb = null;
 
-export async function connectToDatabase() {
+export async function connectToDatabase(env) {
   if (cachedClient && cachedDb) {
     // Test the connection to make sure it's still alive
     try {
@@ -17,11 +17,13 @@ export async function connectToDatabase() {
     }
   }
 
-  if (!process.env.MONGODB_URI) {
+  const uri = env.MONGODB_URI || process.env.MONGODB_URI;
+
+  if (!uri) {
     throw new Error('MONGODB_URI environment variable is not set');
   }
 
-  const client = new MongoClient(process.env.MONGODB_URI, {
+  const client = new MongoClient(uri, {
     maxPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,

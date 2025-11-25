@@ -6,14 +6,14 @@ export async function onRequestOptions() {
   return new Response(null, { headers: corsHeaders });
 }
 
-export async function onRequestPut({ request, params }) {
+export async function onRequestPut({ request, params, env }) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
   const { email } = auth;
   const { id } = params;
 
   try {
-    const { db } = await connectToDatabase();
+    const { db } = await connectToDatabase(env);
     const result = await db.collection('user_sheets').updateOne(
       { userEmail: email, sheetId: id },
       { $set: { lastAccessed: new Date() } }

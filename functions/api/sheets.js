@@ -6,13 +6,13 @@ export async function onRequestOptions() {
   return new Response(null, { headers: corsHeaders });
 }
 
-export async function onRequestGet({ request }) {
+export async function onRequestGet({ request, env }) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
   const { email } = auth;
 
   try {
-    const { db } = await connectToDatabase();
+    const { db } = await connectToDatabase(env);
     const docs = await db.collection('user_sheets')
       .find({ userEmail: email })
       .sort({ lastAccessed: -1 })
@@ -29,11 +29,11 @@ export async function onRequestGet({ request }) {
     return json({ savedSheets });
   } catch (e) {
     console.error('Error fetching sheets:', e);
-    return json({ error: 'Failed to fetch sheets' }, 500);
+    return json({ error: 'Failed to fetch sheets', details: e.message, stack: e.stack }, 500);
   }
 }
 
-export async function onRequestPost({ request }) {
+export async function onRequestPost({ request, env }) {
   const auth = await requireAuth(request);
   if (auth.error) return auth.error;
   const { email } = auth;
@@ -46,7 +46,7 @@ export async function onRequestPost({ request }) {
   }
 
   try {
-    const { db } = await connectToDatabase();
+    const { db } = await connectToDatabase(env);
 
     await db.collection('user_sheets').updateOne(
       { userEmail: email, sheetId },
