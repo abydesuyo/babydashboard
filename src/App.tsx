@@ -49,33 +49,33 @@ function App() {
     const [user, setUser] = useState<UserProfile | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [theme, setTheme] = useState<'light' | 'dark'>('light');
-    
+
     // Sheet selection state
     const [selectedSheet, setSelectedSheet] = useState<SavedSheet | null>(null);
     const [showSheetSelector, setShowSheetSelector] = useState(false);
-    
+
     // Token management
-    const { 
-        accessToken, 
-        isTokenValid, 
+    const {
+        accessToken,
+        isTokenValid,
         getTokenStatus,
-        setTokenData, 
-        clearToken 
+        setTokenData,
+        clearToken
     } = useTokenManager();
 
     const tokenStatus = getTokenStatus();
-    
+
     // Google Sheets operations - only initialize if we have a selected sheet
     const shouldInitializeSheets = accessToken && user?.email && selectedSheet;
-    const { 
-        sheetData, 
-        loadData, 
-        addEntry, 
-        updateEntry, 
+    const {
+        sheetData,
+        loadData,
+        addEntry,
+        updateEntry,
         deleteEntry,
-        isOperationPending 
+        isOperationPending
     } = useGoogleSheets(
-        shouldInitializeSheets ? accessToken : null, 
+        shouldInitializeSheets ? accessToken : null,
         shouldInitializeSheets ? user.email : null,
         shouldInitializeSheets ? selectedSheet.spreadsheetId : null
     );
@@ -86,7 +86,7 @@ function App() {
     const [editingRowIndex, setEditingRowIndex] = useState<number | null>(null);
     const [editRowData, setEditRowData] = useState<ActivityRow | null>(null);
     const [showAddSuccess, setShowAddSuccess] = useState(false);
-    
+
     // New entry state
     const [newEntry, setNewEntry] = useState<NewEntry>({
         DateTime: getCurrentDateTimeLocal(),
@@ -157,7 +157,7 @@ function App() {
     // Data operations
     const handleLoadData = useCallback(async (showLoadingSpinner = true) => {
         if (!accessToken || !selectedSheet) return;
-        
+
         return makeProtectedCall(async () => {
             if (showLoadingSpinner) setIsLoading(true);
             try {
@@ -178,7 +178,7 @@ function App() {
             await addEntry(newEntry);
             setShowAddSuccess(true);
             setTimeout(() => setShowAddSuccess(false), 2000);
-            
+
             // Keep all values including times - preserve everything for continuous entries
         });
     }, [newEntry, addEntry, makeProtectedCall]);
@@ -203,19 +203,21 @@ function App() {
 
     // UI handlers
     const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
-    
+
     const handleReset = () => {
         setDateRange({ start: '', end: '' });
         setSelectedActivity('formula');
     };
 
     const handleEditClick = (row: ActivityRow, index: number) => {
+        console.log('🔍 handleEditClick called', { row, index, date: row.Date, activity: row.Activity });
         setEditingRowIndex(index);
-        
+
         // For sleep entries, find the matching start/end time
         if (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') {
             let endDateTime = '';
-            
+            let startDateTime = '';
+
             if (row.Activity === 'SleepStarted') {
                 // Find the corresponding SleepEnded entry
                 const sleepEnded = sheetData
@@ -225,15 +227,27 @@ function App() {
                         const endTime = new Date(r.Date).getTime();
                         return endTime >= startTime;
                     });
-                
+
+                startDateTime = row.Date;
                 endDateTime = sleepEnded ? sleepEnded.Date : '';
             } else {
-                // For SleepEnded, the end time is the current row's date
+                // For SleepEnded, find the most recent SleepStarted entry that's before this end time
+                const endTime = new Date(row.Date).getTime();
+                const sleepStarted = sheetData
+                    .filter(r => r.Activity === 'SleepStarted')
+                    .filter(r => new Date(r.Date).getTime() < endTime) // Only those before the end time
+                    .sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime()) // Sort descending (most recent first)
+                [0]; // Take the first one (most recent before end time)
+
+                startDateTime = sleepStarted ? sleepStarted.Date : '';
                 endDateTime = row.Date;
             }
-            
-            setEditRowData({ ...row, EndDateTime: endDateTime });
+
+            const newEditData = { ...row, EndDateTime: endDateTime, StartDateTime: startDateTime };
+            console.log('🔧 Setting editRowData for sleep entry:', newEditData);
+            setEditRowData(newEditData);
         } else {
+            console.log('🔧 Setting editRowData for regular entry:', row);
             setEditRowData({ ...row });
         }
     };
@@ -250,17 +264,17 @@ function App() {
     const handleNewEntryChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setNewEntry(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
-    
+
     // Sheet management handlers
     const handleSheetSelected = useCallback((sheet: SavedSheet) => {
         setSelectedSheet(sheet);
         setShowSheetSelector(false);
     }, []);
-    
+
     const handleSwitchSheet = useCallback(() => {
         setShowSheetSelector(true);
     }, []);
-    
+
     const handleCloseSheetSelector = useCallback(() => {
         if (selectedSheet) {
             setShowSheetSelector(false);
@@ -283,7 +297,7 @@ function App() {
             setShowSheetSelector(true);
         }
     }, [user, accessToken, selectedSheet]);
-    
+
     // Load data when sheet is selected
     useEffect(() => {
         if (selectedSheet && accessToken && user) {
@@ -306,7 +320,7 @@ function App() {
     }, [accessToken, user, selectedSheet, isTokenValid, handleLoadData]);
 
     // Memoized calculations
-    const dateFilteredData = useMemo(() => 
+    const dateFilteredData = useMemo(() =>
         sheetData.filter(row => {
             const dateOnly = row.Date?.split(' ')[0];
             if (!dateOnly) return false;
@@ -315,7 +329,7 @@ function App() {
             const start = dateRange.start ? new Date(dateRange.start) : null;
             const end = dateRange.end ? new Date(dateRange.end) : null;
             return !(start && rowDate < start) && !(end && rowDate > end);
-        }), 
+        }),
         [sheetData, dateRange]
     );
 
@@ -329,13 +343,13 @@ function App() {
         return dateFilteredData.filter(row => row.Activity === activityToFilter);
     }, [dateFilteredData, selectedActivity]);
 
-    const summary = useMemo(() => 
-        calculateSummary(dateFilteredData), 
+    const summary = useMemo(() =>
+        calculateSummary(dateFilteredData),
         [dateFilteredData]
     );
-    
-    const chartData = useMemo(() => 
-        processDataForChart(activityFilteredData), 
+
+    const chartData = useMemo(() =>
+        processDataForChart(activityFilteredData),
         [activityFilteredData]
     );
 
@@ -352,24 +366,24 @@ function App() {
         if (newEntry.Activity === 'Sleep') {
             return (
                 <div className="filter-item sleep-time-inputs">
-                    <div style={{flex: 1}}>
+                    <div style={{ flex: 1 }}>
                         <label htmlFor="new-datetime">Start Time</label>
-                        <input 
-                            id="new-datetime" 
-                            type="datetime-local" 
-                            name="DateTime" 
-                            value={newEntry.DateTime} 
-                            onChange={handleNewEntryChange} 
+                        <input
+                            id="new-datetime"
+                            type="datetime-local"
+                            name="DateTime"
+                            value={newEntry.DateTime}
+                            onChange={handleNewEntryChange}
                         />
                     </div>
-                    <div style={{flex: 1}}>
+                    <div style={{ flex: 1 }}>
                         <label htmlFor="new-endtime">End Time</label>
-                        <input 
-                            id="new-endtime" 
-                            type="datetime-local" 
-                            name="EndDateTime" 
-                            value={newEntry.EndDateTime} 
-                            onChange={handleNewEntryChange} 
+                        <input
+                            id="new-endtime"
+                            type="datetime-local"
+                            name="EndDateTime"
+                            value={newEntry.EndDateTime}
+                            onChange={handleNewEntryChange}
                         />
                     </div>
                 </div>
@@ -379,19 +393,19 @@ function App() {
             return (
                 <div className="filter-item">
                     <label htmlFor="new-quantity">Quantity (ml)</label>
-                    <input 
-                        id="new-quantity" 
-                        type="number" 
-                        min="0" 
-                        name="Quantity" 
-                        placeholder="e.g., 160" 
-                        value={newEntry.Quantity} 
-                        onChange={handleNewEntryChange} 
+                    <input
+                        id="new-quantity"
+                        type="number"
+                        min="0"
+                        name="Quantity"
+                        placeholder="e.g., 160"
+                        value={newEntry.Quantity}
+                        onChange={handleNewEntryChange}
                     />
                 </div>
             );
         }
-        return <div className="filter-item" style={{flexGrow: 0.5}}></div>;
+        return <div className="filter-item" style={{ flexGrow: 0.5 }}></div>;
     };
 
     return (
@@ -399,9 +413,9 @@ function App() {
             <header className="App-header">
                 <h1>Baby Activity Dashboard</h1>
                 {user && (
-                    <button 
-                        className="theme-toggle" 
-                        onClick={toggleTheme} 
+                    <button
+                        className="theme-toggle"
+                        onClick={toggleTheme}
                         aria-label="Toggle theme"
                     >
                         {theme === 'light' ? <MoonIcon /> : <SunIcon />}
@@ -425,7 +439,7 @@ function App() {
                                 {selectedSheet && (
                                     <p className="sheet-info">
                                         Current sheet: <strong>{selectedSheet.name}</strong>
-                                        <button 
+                                        <button
                                             onClick={handleSwitchSheet}
                                             className="switch-sheet-button"
                                             title="Switch to a different sheet"
@@ -442,7 +456,7 @@ function App() {
 
                         {tokenStatus.isExpiringSoon && (
                             <div className="token-warning">
-                                ⏰ Session expires in {tokenStatus.minutesUntilExpiry} minute{tokenStatus.minutesUntilExpiry !== 1 ? 's' : ''}. 
+                                ⏰ Session expires in {tokenStatus.minutesUntilExpiry} minute{tokenStatus.minutesUntilExpiry !== 1 ? 's' : ''}.
                                 <button onClick={() => login()} className="refresh-button">
                                     Refresh Session
                                 </button>
@@ -466,86 +480,86 @@ function App() {
                                     </div>
                                 )}
 
-                        {(!isLoading || sheetData.length > 0) && (
-                            <>
-                                <div className="add-entry-container filters-container">
-                                    <div className="filter-item">
-                                        <label htmlFor="new-activity">Activity</label>
-                                        <select 
-                                            id="new-activity" 
-                                            name="Activity" 
-                                            value={newEntry.Activity} 
-                                            onChange={handleNewEntryChange}
-                                        >
-                                            <option value="Formula">Formula</option>
-                                            <option value="Sleep">Sleep</option>
-                                            <option value="Pooped">Pooped</option>
-                                        </select>
-                                    </div>
+                                {(!isLoading || sheetData.length > 0) && (
+                                    <>
+                                        <div className="add-entry-container filters-container">
+                                            <div className="filter-item">
+                                                <label htmlFor="new-activity">Activity</label>
+                                                <select
+                                                    id="new-activity"
+                                                    name="Activity"
+                                                    value={newEntry.Activity}
+                                                    onChange={handleNewEntryChange}
+                                                >
+                                                    <option value="Formula">Formula</option>
+                                                    <option value="Sleep">Sleep</option>
+                                                    <option value="Pooped">Pooped</option>
+                                                </select>
+                                            </div>
 
-                                    {newEntry.Activity !== 'Sleep' && (
-                                        <div className="filter-item">
-                                            <label htmlFor="new-datetime">Date & Time</label>
-                                            <input 
-                                                id="new-datetime" 
-                                                type="datetime-local" 
-                                                name="DateTime" 
-                                                value={newEntry.DateTime} 
-                                                onChange={handleNewEntryChange} 
-                                            />
+                                            {newEntry.Activity !== 'Sleep' && (
+                                                <div className="filter-item">
+                                                    <label htmlFor="new-datetime">Date & Time</label>
+                                                    <input
+                                                        id="new-datetime"
+                                                        type="datetime-local"
+                                                        name="DateTime"
+                                                        value={newEntry.DateTime}
+                                                        onChange={handleNewEntryChange}
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {renderNewEntryFields()}
+
+                                            <div className="filter-item">
+                                                <button
+                                                    onClick={handleAddEntry}
+                                                    className="add-button"
+                                                    disabled={isOperationPending}
+                                                >
+                                                    {isOperationPending ? 'Adding...' : 'Add Entry'}
+                                                </button>
+                                            </div>
                                         </div>
-                                    )}
 
-                                    {renderNewEntryFields()}
+                                        {showAddSuccess && (
+                                            <div className="success-message">
+                                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 8 }}>
+                                                    <polyline points="20 6 9 17 4 12" />
+                                                </svg>
+                                                Entry added successfully!
+                                            </div>
+                                        )}
 
-                                    <div className="filter-item">
-                                        <button 
-                                            onClick={handleAddEntry} 
-                                            className="add-button"
-                                            disabled={isOperationPending}
-                                        >
-                                            {isOperationPending ? 'Adding...' : 'Add Entry'}
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {showAddSuccess && (
-                                    <div className="success-message">
-                                        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" style={{marginRight: 8}}>
-                                            <polyline points="20 6 9 17 4 12" />
-                                        </svg>
-                                        Entry added successfully!
-                                    </div>
+                                        <Suspense fallback={
+                                            <div className="loading-container">
+                                                <div className="loading-spinner">Loading dashboard...</div>
+                                            </div>
+                                        }>
+                                            <Dashboard
+                                                summary={summary}
+                                                dateRange={dateRange}
+                                                setDateRange={setDateRange}
+                                                selectedActivity={selectedActivity}
+                                                setSelectedActivity={setSelectedActivity}
+                                                handleReset={handleReset}
+                                                chartData={chartData}
+                                                tooltipFormatter={tooltipFormatter}
+                                                dateFilteredData={dateFilteredData}
+                                                editingRowIndex={editingRowIndex}
+                                                editRowData={editRowData}
+                                                handleEditClick={handleEditClick}
+                                                handleSaveClick={handleSaveEdit}
+                                                handleCancelClick={handleCancelEdit}
+                                                handleDeleteClick={handleDeleteEntry}
+                                                handleEditChange={handleEditChange}
+                                                isOperationPending={isOperationPending}
+                                            />
+                                        </Suspense>
+                                    </>
                                 )}
-
-                                <Suspense fallback={
-                                    <div className="loading-container">
-                                        <div className="loading-spinner">Loading dashboard...</div>
-                                    </div>
-                                }>
-                                    <Dashboard
-                                        summary={summary}
-                                        dateRange={dateRange}
-                                        setDateRange={setDateRange}
-                                        selectedActivity={selectedActivity}
-                                        setSelectedActivity={setSelectedActivity}
-                                        handleReset={handleReset}
-                                        chartData={chartData}
-                                        tooltipFormatter={tooltipFormatter}
-                                        dateFilteredData={dateFilteredData}
-                                        editingRowIndex={editingRowIndex}
-                                        editRowData={editRowData}
-                                        handleEditClick={handleEditClick}
-                                        handleSaveClick={handleSaveEdit}
-                                        handleCancelClick={handleCancelEdit}
-                                        handleDeleteClick={handleDeleteEntry}
-                                        handleEditChange={handleEditChange}
-                                        isOperationPending={isOperationPending}
-                                    />
-                                </Suspense>
                             </>
-                        )}
-                        </>
                         )}
                     </>
                 )}

@@ -12,6 +12,7 @@ export type ActivityRow = {
   sheetRowIndex: number;
   originalIndex: string;
   EndDateTime?: string; // Only for sleep edit
+  StartDateTime?: string; // Only for sleep edit - actual start time from SleepStarted row
 };
 
 export type NewEntry = {

@@ -1,37 +1,22 @@
-import { json } from './_shared/database.js';
+import { json, corsHeaders } from './_shared/database.js';
 
 // Cloudflare Pages Function - GET /health
-export async function onRequest(context) {
-  const { request } = context;
-  
-  // Handle CORS
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Email',
-  };
+export async function onRequestOptions() {
+  return new Response(null, { headers: corsHeaders });
+}
 
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  if (request.method !== 'GET') {
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
-  }
-
+export async function onRequestGet() {
   try {
-    // Simple health check with MongoDB
-    return json({ status: 'healthy', runtime: 'cloudflare-pages', timestamp: new Date().toISOString() });
-  } catch (error) {
-    return new Response(JSON.stringify({ 
-      status: 'unhealthy', 
-      error: error.message 
-    }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
+    // Simple health check
+    return json({
+      status: 'healthy',
+      runtime: 'cloudflare-pages',
+      timestamp: new Date().toISOString()
     });
+  } catch (error) {
+    return json({
+      status: 'unhealthy',
+      error: error.message
+    }, 500);
   }
 }

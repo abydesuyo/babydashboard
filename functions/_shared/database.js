@@ -26,17 +26,17 @@ export async function connectToDatabase() {
     serverSelectionTimeoutMS: 5000,
     socketTimeoutMS: 45000,
   });
-  
+
   try {
     await client.connect();
     const db = client.db('baby-dashboard');
-    
+
     // Test the connection
     await db.admin().ping();
-    
+
     cachedClient = client;
     cachedDb = db;
-    
+
     return { client, db };
   } catch (error) {
     console.error('MongoDB connection error:', error);
@@ -100,9 +100,18 @@ export async function closeConnection() {
   }
 }
 
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-User-Email',
+};
+
 export function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...corsHeaders,
+    },
   });
 }

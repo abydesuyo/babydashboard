@@ -27,25 +27,53 @@ type DashboardProps = {
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   const userTimezoneOffset = date.getTimezoneOffset() * 60000;
-  return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('en-US', { 
-    month: 'short', 
-    day: 'numeric' 
+  return new Date(date.getTime() + userTimezoneOffset).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric'
   });
 };
 
+// Helper to format datetime string for datetime-local input (requires YYYY-MM-DDTHH:mm format)
+const formatToDateTimeLocal = (dateStr: string): string => {
+  if (!dateStr || typeof dateStr !== 'string') return '';
+
+  // If already in ISO format, just slice to required length
+  if (dateStr.includes('T')) {
+    return dateStr.slice(0, 16);
+  }
+
+  // Handle format like "2025-11-25 7:48" or "2025-11-25 7:48:00"
+  if (dateStr.includes(' ')) {
+    const [datePart, timePart] = dateStr.split(' ');
+    if (timePart) {
+      // Split time into components and pad with zeros
+      const timeComponents = timePart.split(':');
+      const hour = timeComponents[0]?.padStart(2, '0') || '00';
+      const minute = timeComponents[1]?.padStart(2, '0') || '00';
+      return `${datePart}T${hour}:${minute}`;
+    }
+  }
+
+  // Fallback: return as-is
+  return dateStr;
+};
+
 const renderEditableCell = (
-  value: string, 
-  key: string, 
-  isEditing: boolean, 
+  value: string,
+  key: string,
+  isEditing: boolean,
   editRowData: ActivityRow | null,
   handleEditChange: (e: React.ChangeEvent<HTMLInputElement>, key: string) => void
 ) => {
   if (!isEditing) return value;
-  
+
+  // Use editRowData value if available, otherwise fall back to the original value
+  const inputValue = editRowData?.[key as keyof ActivityRow]?.toString() || value || '';
+
   return (
-    <input 
+    <input
       type={key === 'Date' ? 'datetime-local' : 'text'}
-      value={editRowData?.[key as keyof ActivityRow]?.toString() || ''} 
+      value={inputValue}
       onChange={(e) => handleEditChange(e, key)}
       style={{ width: '100%' }}
     />
@@ -120,29 +148,29 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
       <div className="filters-container">
         <div className="filter-item">
           <label htmlFor="start-date">Start Date</label>
-          <input 
-            id="start-date" 
-            type="date" 
-            name="start" 
-            value={dateRange.start} 
-            onChange={e => setDateRange({...dateRange, start: e.target.value})} 
+          <input
+            id="start-date"
+            type="date"
+            name="start"
+            value={dateRange.start}
+            onChange={e => setDateRange({ ...dateRange, start: e.target.value })}
           />
         </div>
         <div className="filter-item">
           <label htmlFor="end-date">End Date</label>
-          <input 
-            id="end-date" 
-            type="date" 
-            name="end" 
-            value={dateRange.end} 
-            onChange={e => setDateRange({...dateRange, end: e.target.value})} 
+          <input
+            id="end-date"
+            type="date"
+            name="end"
+            value={dateRange.end}
+            onChange={e => setDateRange({ ...dateRange, end: e.target.value })}
           />
         </div>
         <div className="filter-item">
           <label htmlFor="activity-type">Activity Type</label>
-          <select 
-            id="activity-type" 
-            value={selectedActivity} 
+          <select
+            id="activity-type"
+            value={selectedActivity}
             onChange={e => setSelectedActivity(e.target.value)}
           >
             {Object.keys(activityConfig).map(key => (
@@ -164,20 +192,20 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
           <ComposedChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="date" tickFormatter={formatDate} />
-            <YAxis 
-              allowDecimals={false} 
-              label={{ 
-                value: currentConfig.unit, 
-                angle: -90, 
-                position: 'insideLeft' 
-              }} 
+            <YAxis
+              allowDecimals={false}
+              label={{
+                value: currentConfig.unit,
+                angle: -90,
+                position: 'insideLeft'
+              }}
             />
             <Tooltip formatter={tooltipFormatter} />
             <Legend />
-            <Bar 
-              dataKey={currentConfig.key} 
-              name={currentConfig.name} 
-              fill={currentConfig.color} 
+            <Bar
+              dataKey={currentConfig.key}
+              name={currentConfig.name}
+              fill={currentConfig.color}
             />
           </ComposedChart>
         </ResponsiveContainer>
@@ -237,9 +265,11 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
           <tbody>
             {tableRows.map(({ row, originalIndex }) => {
               const isEditing = editingRowIndex === originalIndex;
-              const displayDate = isEditing && editRowData?.Date
-                ? editRowData.Date.replace(' ', 'T').slice(0, 16)
-                : row.Date;
+
+              // Get the date value to display (prefer editRowData when editing)
+              const dateValue = (isEditing && editRowData?.Date) ? editRowData.Date : row.Date;
+              // Format for datetime-local input (with proper zero-padding)
+              const displayDate = formatToDateTimeLocal(dateValue);
 
               return (
                 <tr key={`${originalIndex}-${row.Date}`}>
@@ -259,43 +289,81 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
                     {renderEditableCell(row.Activity, 'Activity', isEditing, editRowData, handleEditChange)}
                   </td>
                   <td>
-                    {isEditing && (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                        <input 
-                          type="text"
-                          placeholder="Duration (minutes)"
-                          value={editRowData?.Quantity || ''}
-                          onChange={(e) => handleEditChange(e, 'Quantity')}
-                          style={{ width: '100%' }}
-                        />
-                        <input
-                          type="datetime-local"
-                          placeholder="End time"
-                          value={editRowData?.EndDateTime?.replace(' ', 'T').slice(0, 16) || ''}
-                          onChange={(e) => handleEditChange(e, 'EndDateTime')}
-                          style={{ width: '100%' }}
-                        />
+                    {isEditing && row.Activity === 'SleepEnded' ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#4CAF50' }}>
+                            Sleep Start Time:
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={formatToDateTimeLocal(editRowData?.StartDateTime || '')}
+                            onChange={(e) => {
+                              // Update the start time
+                              handleEditChange(e, 'StartDateTime');
+                              // When start time changes, recalculate duration
+                              if (editRowData?.EndDateTime && e.target.value) {
+                                const startTime = new Date(e.target.value).getTime();
+                                const endTime = new Date(editRowData.EndDateTime).getTime();
+                                const durationMinutes = Math.round((endTime - startTime) / 60000);
+                                handleEditChange({ target: { value: durationMinutes.toString() } } as any, 'Quantity');
+                              }
+                            }}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#2196F3' }}>
+                            Sleep End Time:
+                          </label>
+                          <input
+                            type="datetime-local"
+                            value={formatToDateTimeLocal(editRowData?.EndDateTime || '')}
+                            onChange={(e) => {
+                              handleEditChange(e, 'EndDateTime');
+                              // When end time changes, recalculate duration
+                              if (editRowData?.Quantity && e.target.value) {
+                                const startTime = new Date(new Date(e.target.value).getTime() - (parseInt(editRowData.Quantity) * 60000)).getTime();
+                                const endTime = new Date(e.target.value).getTime();
+                                const durationMinutes = Math.round((endTime - startTime) / 60000);
+                                handleEditChange({ target: { value: durationMinutes.toString() } } as any, 'Quantity');
+                              }
+                            }}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px' }}>
+                            Duration (minutes):
+                          </label>
+                          <input
+                            type="text"
+                            value={editRowData?.Quantity || ''}
+                            onChange={(e) => handleEditChange(e, 'Quantity')}
+                            style={{ width: '100%' }}
+                          />
+                        </div>
                       </div>
                     ) : (
                       renderEditableCell(row.Quantity, 'Quantity', isEditing, editRowData, handleEditChange)
                     )}
                   </td>
                   <td>
-                    {row.Activity === 'Formula' ? 'ml' : 
-                     row.Activity === 'SleepEnded' ? 'minutes' : ''}
+                    {row.Activity === 'Formula' ? 'ml' :
+                      row.Activity === 'SleepEnded' ? 'minutes' : ''}
                   </td>
                   <td>
                     {isEditing ? (
                       <>
-                        <button 
-                          className="save-button" 
+                        <button
+                          className="save-button"
                           onClick={handleSaveClick}
                           disabled={isOperationPending}
                         >
                           {isOperationPending ? 'Saving...' : 'Save'}
                         </button>
-                        <button 
-                          className="cancel-button" 
+                        <button
+                          className="cancel-button"
                           onClick={handleCancelClick}
                           disabled={isOperationPending}
                         >
@@ -310,10 +378,11 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
                         </button>
                       </>
                     ) : (
-                      <button 
-                        className="edit-button" 
+                      <button
+                        className="edit-button"
                         onClick={() => handleEditClick(row, originalIndex)}
-                        disabled={isOperationPending}
+                        disabled={isOperationPending || row.Activity === 'SleepStarted'}
+                        title={row.Activity === 'SleepStarted' ? 'Please edit the corresponding SleepEnded row instead' : ''}
                       >
                         Edit
                       </button>
