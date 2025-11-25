@@ -1,18 +1,9 @@
-name = "baby-activity-dashboard"
+name = "baby-dashboard"
+pages_build_output_dir = "dist"
 compatibility_date = "2024-06-20"
+compatibility_flags = ["nodejs_compat"]
 
-[assets]
-# Dist folder produced by Vite build
-directory = "dist"
-
-[pages]
-# Optional: custom project name in Cloudflare Pages
-project_name = "baby-activity-dashboard"
-
-# Environment variable bindings for Pages Functions
 [vars]
-# Set these in Cloudflare Pages dashboard for Production; local dev can override via CLI flags
-DATA_API_URL = ""
-DATA_API_KEY = ""
-DATA_SOURCE = ""
-DB_NAME = "baby-dashboard"
+# Environment variables are set in the Cloudflare Dashboard
+# MONGODB_URI
+# VITE_GOOGLE_CLIENT_ID
