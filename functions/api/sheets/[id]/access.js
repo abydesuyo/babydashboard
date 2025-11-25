@@ -1,27 +1,25 @@
 // Cloudflare Pages Function - /api/sheets/[id]/access
-import { MongoClient } from 'mongodb';
+import { mongoAction, json } from '../../../_shared/database.js';
+import { requireAuth } from '../../../_shared/auth.js';
 
-let cachedClient = null;
-let cachedDb = null;
+export async function onRequestPut({ request, params, env }) {
+  const auth = await requireAuth(request);
+  if (auth.error) return auth.error;
+  const { email } = auth;
+  const { id } = params;
 
-async function connectToDatabase() {
-  if (cachedClient && cachedDb) {
-    return { client: cachedClient, db: cachedDb };
-  }
-
-  const client = new MongoClient(process.env.MONGODB_URI);
-  
   try {
-    await client.connect();
-    const db = client.db('baby-dashboard');
-    
-    cachedClient = client;
-    cachedDb = db;
-    
-    return { client, db };
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    throw new Error('Database connection failed');
+    const result = await mongoAction(env, 'updateOne', {
+      collection: 'user_sheets',
+      filter: { userEmail: email, sheetId: id },
+      update: { $set: { lastAccessed: new Date() } },
+    });
+    if ((result.matchedCount || 0) === 0) {
+      return json({ error: 'Sheet not found' }, 404);
+    }
+    return json({ success: true, message: 'Last accessed time updated' });
+  } catch (e) {
+    return json({ error: 'Failed to update sheet access' }, 500);
   }
 }
 
@@ -54,14 +52,13 @@ export async function onRequest(context) {
   try {
     if (request.method === 'PUT') {
       try {
-        const { db } = await connectToDatabase();
-        
-        const result = await db.collection('user_sheets').updateOne(
-          { userEmail, sheetId },
-          { $set: { lastAccessed: new Date() } }
-        );
+        const result = await mongoAction(env, 'updateOne', {
+          collection: 'user_sheets',
+          filter: { userEmail, sheetId },
+          update: { $set: { lastAccessed: new Date() } },
+        });
 
-        if (result.matchedCount === 0) {
+        if ((result.matchedCount || 0) === 0) {
           return new Response(JSON.stringify({ error: 'Sheet not found' }), {
             status: 404,
             headers: { 'Content-Type': 'application/json', ...corsHeaders }

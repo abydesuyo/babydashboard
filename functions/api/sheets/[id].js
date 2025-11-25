@@ -53,31 +53,10 @@ export async function onRequest(context) {
   
   try {
     if (request.method === 'DELETE') {
-      try {
-        const { db } = await connectToDatabase();
-        
-        const result = await db.collection('user_sheets').deleteOne({
-          userEmail,
-          sheetId
-        });
-
-        if (result.deletedCount === 0) {
-          return new Response(JSON.stringify({ error: 'Sheet not found' }), {
-            status: 404,
-            headers: { 'Content-Type': 'application/json', ...corsHeaders }
-          });
-        }
-
-        return new Response(JSON.stringify({ success: true }), {
-          headers: { 'Content-Type': 'application/json', ...corsHeaders }
-        });
-      } catch (dbError) {
-        console.error('Database delete error:', dbError);
-        return new Response(JSON.stringify({ error: 'Failed to delete sheet' }), {
-          status: 500,
-          headers: { 'Content-Type': 'application/json', ...corsHeaders }
-        });
-      }
+      return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+        status: 405,
+        headers: { 'Content-Type': 'application/json', ...corsHeaders }
+      });
     }
 
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {

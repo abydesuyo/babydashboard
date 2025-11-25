@@ -1,5 +1,5 @@
 // src/components/Dashboard.tsx
-import React, { memo } from 'react';
+import React, { memo, useMemo, useState } from 'react';
 import { ComposedChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { activityConfig } from '../config/activityConfig';
 import type { ActivityRow } from '../types';
@@ -72,6 +72,33 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
   isOperationPending,
 }) => {
   const currentConfig = activityConfig[selectedActivity as keyof typeof activityConfig];
+
+  // Column-level table filters: keep Activity independent; use parent dateRange for dates
+  const [colFilters, setColFilters] = useState<{ activity: string }>({
+    activity: 'All',
+  });
+
+  const activityOptions = useMemo(() => {
+    const s = new Set<string>();
+    dateFilteredData.forEach(r => { if (r.Activity) s.add(r.Activity); });
+    return ['All', ...Array.from(s)];
+  }, [dateFilteredData]);
+
+  // Table rows use the parent-provided dateFilteredData + Activity column filter only
+  const tableRows = useMemo(() => {
+    return dateFilteredData
+      .map((row, idx) => ({ row, originalIndex: idx }))
+      .filter(({ row }) => {
+        if (colFilters.activity !== 'All' && row.Activity !== colFilters.activity) return false;
+        return true;
+      });
+  }, [dateFilteredData, colFilters]);
+
+  const clearColumnFilters = () => {
+    // Clear only the table Activity and the shared date range
+    setColFilters({ activity: 'All' });
+    setDateRange({ start: '', end: '' });
+  };
 
   return (
     <>
@@ -167,16 +194,55 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
               <th>Units</th>
               <th>Actions</th>
             </tr>
+            <tr className="column-filters">
+              <th>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="date"
+                    aria-label="Filter start date"
+                    value={dateRange.start}
+                    onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                    style={{ width: '100%' }}
+                  />
+                  <input
+                    type="date"
+                    aria-label="Filter end date"
+                    value={dateRange.end}
+                    onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                    style={{ width: '100%' }}
+                  />
+                </div>
+              </th>
+              <th>
+                <select
+                  aria-label="Filter activity"
+                  value={colFilters.activity}
+                  onChange={(e) => setColFilters(f => ({ ...f, activity: e.target.value }))}
+                  style={{ width: '100%' }}
+                >
+                  {activityOptions.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </th>
+              <th />
+              <th />
+              <th>
+                <button className="reset-button" onClick={clearColumnFilters}>
+                  Clear
+                </button>
+              </th>
+            </tr>
           </thead>
           <tbody>
-            {dateFilteredData.map((row, index) => {
-              const isEditing = editingRowIndex === index;
+            {tableRows.map(({ row, originalIndex }) => {
+              const isEditing = editingRowIndex === originalIndex;
               const displayDate = isEditing && editRowData?.Date
                 ? editRowData.Date.replace(' ', 'T').slice(0, 16)
                 : row.Date;
 
               return (
-                <tr key={`${row.originalIndex}-${row.Date}`}>
+                <tr key={`${originalIndex}-${row.Date}`}>
                   <td>
                     {isEditing ? (
                       <input
@@ -246,7 +312,7 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
                     ) : (
                       <button 
                         className="edit-button" 
-                        onClick={() => handleEditClick(row, index)}
+                        onClick={() => handleEditClick(row, originalIndex)}
                         disabled={isOperationPending}
                       >
                         Edit

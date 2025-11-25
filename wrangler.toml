@@ -1,6 +1,18 @@
-name = "baby-dashboard"
-compatibility_date = "2024-01-01"
+name = "baby-activity-dashboard"
+compatibility_date = "2024-06-20"
 
-# Simple Cloudflare Pages configuration without MongoDB for now
-[env.production]
-compatibility_date = "2024-01-01"
+[assets]
+# Dist folder produced by Vite build
+directory = "dist"
+
+[pages]
+# Optional: custom project name in Cloudflare Pages
+project_name = "baby-activity-dashboard"
+
+# Environment variable bindings for Pages Functions
+[vars]
+# Set these in Cloudflare Pages dashboard for Production; local dev can override via CLI flags
+DATA_API_URL = ""
+DATA_API_KEY = ""
+DATA_SOURCE = ""
+DB_NAME = "baby-dashboard"

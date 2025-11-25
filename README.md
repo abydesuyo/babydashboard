@@ -1,69 +1,47 @@
-# React + TypeScript + Vite
+# Baby Activity Dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React + TypeScript (Vite) frontend with a Node.js (Express) backend and MongoDB Atlas.
 
-Currently, two official plugins are available:
+- Frontend: `src/` (Vite) → deploy to Cloudflare Pages
+- Backend: `backend/` (Express + MongoDB) → deploy to Railway/Render
+- Types and utilities in `src/types` and `src/utils`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Local Development
 
-## Expanding the ESLint configuration
+- Backend:
+  ```bash
+  cd backend
+  npm install
+  npm run dev
+  ```
+- Frontend (in another terminal):
+  ```bash
+  npm install
+  npm run dev
+  ```
+- Or both at once from project root:
+  ```bash
+  npm run start:all
+  ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Production Deployment
 
-```js
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Full guide: see `DEPLOYMENT.md`
+- Backend details: see `backend/README.md`
 
-      // Remove tseslint.configs.recommended and replace with this
-      ...tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      ...tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      ...tseslint.configs.stylisticTypeChecked,
+## Environment
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- Frontend (dev): defaults to `http://localhost:3001` for API
+- Frontend (prod): set `VITE_API_URL` to your backend URL in Cloudflare Pages
+- Backend: set `MONGODB_URI`, `ALLOWED_ORIGINS`, etc. in your host (Railway/Render)
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## API
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+- Health: `GET /api/health`
+- Sheets: `GET/POST /api/sheets`
+- Update Access: `PUT /api/sheets/:id/access`
 
-export default tseslint.config([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+## Notes
+
+- No deprecated SDKs (uses MongoDB native driver on backend)
+- Keep the `/functions` directory disabled or removed if not using Cloudflare Pages Functions

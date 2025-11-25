@@ -44,37 +44,49 @@ function verifyGoogleToken(req, res, next) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ error: 'Authorization token required' });
   }
-  
   const token = authHeader.substring(7);
   if (!token) {
     return res.status(401).json({ error: 'Invalid token format' });
   }
-  
   req.token = token;
   req.userEmail = req.headers['x-user-email'];
-  
   if (!req.userEmail) {
     return res.status(400).json({ error: 'User email required in headers' });
   }
-  
   next();
 }
 
 app.get('/health', async (req, res) => {
   try {
     await db.admin().ping();
-    res.json({ 
-      status: 'healthy', 
-      mongodb: 'connected',
-      timestamp: new Date().toISOString()
-    });
+    res.json({ status: 'healthy', mongodb: 'connected', timestamp: new Date().toISOString() });
   } catch (error) {
-    res.status(503).json({ 
-      status: 'unhealthy', 
-      mongodb: 'disconnected',
-      error: error.message 
-    });
+    res.status(503).json({ status: 'unhealthy', mongodb: 'disconnected', error: error.message });
   }
+});
+
+// REST-friendly alias so clients can hit /api/health (no redirect)
+app.get('/api/health', async (req, res) => {
+  try {
+    await db.admin().ping();
+    res.json({ status: 'healthy', mongodb: 'connected', timestamp: new Date().toISOString() });
+  } catch (error) {
+    res.status(503).json({ status: 'unhealthy', mongodb: 'disconnected', error: error.message });
+  }
+});
+
+// Optional API index endpoint for quick sanity checks
+app.get('/api', (req, res) => {
+  res.json({
+    name: 'baby-dashboard-api',
+    version: '1.0',
+    endpoints: [
+      'GET  /api/health',
+      'GET  /api/sheets',
+      'POST /api/sheets',
+      'PUT  /api/sheets/:id/access'
+    ]
+  });
 });
 
 app.get('/api/sheets', verifyGoogleToken, async (req, res) => {
@@ -103,26 +115,14 @@ app.get('/api/sheets', verifyGoogleToken, async (req, res) => {
 app.post('/api/sheets', verifyGoogleToken, async (req, res) => {
   try {
     const { sheetId, sheetName, spreadsheetId, role = 'owner' } = req.body;
-    
     if (!sheetId || !sheetName || !spreadsheetId) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
-
-    const existingSheet = await db.collection('user_sheets').findOne({
-      userEmail: req.userEmail,
-      sheetId
-    });
-
+    const existingSheet = await db.collection('user_sheets').findOne({ userEmail: req.userEmail, sheetId });
     if (existingSheet) {
       await db.collection('user_sheets').updateOne(
         { _id: existingSheet._id },
-        { 
-          $set: { 
-            lastAccessed: new Date(),
-            sheetName,
-            spreadsheetId
-          }
-        }
+        { $set: { lastAccessed: new Date(), sheetName, spreadsheetId } }
       );
     } else {
       await db.collection('user_sheets').insertOne({
@@ -136,21 +136,11 @@ app.post('/api/sheets', verifyGoogleToken, async (req, res) => {
         createdAt: new Date()
       });
     }
-
     await db.collection('users').updateOne(
       { email: req.userEmail },
-      { 
-        $set: { 
-          email: req.userEmail,
-          updatedAt: new Date()
-        },
-        $setOnInsert: { 
-          createdAt: new Date()
-        }
-      },
+      { $set: { email: req.userEmail, updatedAt: new Date() }, $setOnInsert: { createdAt: new Date() } },
       { upsert: true }
     );
-
     res.json({ success: true, message: 'Sheet saved successfully' });
   } catch (error) {
     console.error('Error saving sheet:', error);
@@ -161,40 +151,17 @@ app.post('/api/sheets', verifyGoogleToken, async (req, res) => {
 app.put('/api/sheets/:id/access', verifyGoogleToken, async (req, res) => {
   try {
     const { id } = req.params;
-    
     const result = await db.collection('user_sheets').updateOne(
       { userEmail: req.userEmail, sheetId: id },
       { $set: { lastAccessed: new Date() } }
     );
-
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: 'Sheet not found' });
     }
-
     res.json({ success: true, message: 'Last accessed time updated' });
   } catch (error) {
     console.error('Error updating sheet access:', error);
     res.status(500).json({ error: 'Failed to update sheet access' });
-  }
-});
-
-app.delete('/api/sheets/:id', verifyGoogleToken, async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    const result = await db.collection('user_sheets').deleteOne({
-      userEmail: req.userEmail,
-      sheetId: id
-    });
-
-    if (result.deletedCount === 0) {
-      return res.status(404).json({ error: 'Sheet not found' });
-    }
-
-    res.json({ success: true, message: 'Sheet removed successfully' });
-  } catch (error) {
-    console.error('Error removing sheet:', error);
-    res.status(500).json({ error: 'Failed to remove sheet' });
   }
 });
 

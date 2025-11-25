@@ -2,21 +2,36 @@
 import type { SavedSheet } from '../types';
 
 // API URL - for Cloudflare Pages, use same domain in production, localhost for dev
-const API_BASE_URL = import.meta.env.VITE_API_URL || (typeof window !== 'undefined' ? window.location.origin : '');
+// For Cloudflare Pages, API functions are served from the same domain.
+// In local dev (Vite on :5173), default to the backend on :3001 so no extra env is needed.
+const API_BASE_URL = (() => {
+  const fromEnv = (import.meta as any)?.env?.VITE_API_URL as string | undefined;
+  if (fromEnv && fromEnv.trim()) {
+    return fromEnv.replace(/\/$/, '');
+  }
+  if (typeof window !== 'undefined') {
+    const { hostname } = window.location;
+    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
+    if (isLocalhost) return 'http://localhost:3001';
+    return window.location.origin;
+  }
+  return '';
+})();
 
 class ApiError extends Error {
   public status?: number;
-  constructor(message: string, status?: number) {
+  public details?: unknown;
+  constructor(message: string, status?: number, details?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.details = details;
   }
 }
 
 export class ApiClient {
   private accessToken: string | null = null;
   private userEmail: string | null = null;
-
   constructor(accessToken?: string, userEmail?: string) {
     if (accessToken) {
       this.accessToken = accessToken;
@@ -34,7 +49,10 @@ export class ApiClient {
     this.userEmail = email;
   }
 
-  private async makeRequest(endpoint: string, options: { method?: string; body?: string; headers?: Record<string, string> } = {}): Promise<Response> {
+  private async makeRequest(
+    endpoint: string,
+    options: { method?: string; body?: string; headers?: Record<string, string> } = {}
+  ): Promise<any> {
     if (!this.accessToken) {
       throw new ApiError('No access token available');
     }
@@ -46,30 +64,57 @@ export class ApiClient {
     const url = `${API_BASE_URL}${endpoint}`;
     const headers = {
       'Content-Type': 'application/json',
+      'Accept': 'application/json',
       'Authorization': `Bearer ${this.accessToken}`,
       'X-User-Email': this.userEmail,
       ...options.headers,
-    };
+    } as Record<string, string>;
 
     const response = await fetch(url, {
-      ...options,
+      method: options.method || 'GET',
+      body: options.body,
       headers,
     });
 
+    const contentType = response.headers.get('content-type') || '';
+    const text = await response.text();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new ApiError(`API request failed: ${errorText}`, response.status);
+      // Try to parse JSON error first
+      if (contentType.includes('application/json')) {
+        try {
+          const json = JSON.parse(text);
+          throw new ApiError(json.error || 'API request failed', response.status, json);
+        } catch {
+          // fallthrough to text-based error
+        }
+      }
+      throw new ApiError(`API request failed: ${text?.slice(0, 500) || response.statusText}`, response.status, text);
     }
 
-    return response;
+    if (!text) return null;
+
+    if (contentType.includes('application/json')) {
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        throw new ApiError('Invalid JSON in API response', response.status, text?.slice(0, 500));
+      }
+    }
+
+    // Fallback: attempt JSON parse, else return raw text
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
   }
 
   // Get user's saved sheets
   async getUserSheets(): Promise<SavedSheet[]> {
     try {
-      const response = await this.makeRequest('/api/sheets');
-      const data = await response.json();
-      return data.sheets || data.savedSheets || [];
+      const data = await this.makeRequest('/api/sheets');
+      return data?.sheets || data?.savedSheets || [];
     } catch (error) {
       console.error('Failed to get user sheets from API:', error);
       throw error;
@@ -106,22 +151,16 @@ export class ApiClient {
     }
   }
 
-  // Remove a sheet from user's collection
-  async removeSheet(sheetId: string): Promise<void> {
-    try {
-      await this.makeRequest(`/api/sheets/${sheetId}`, {
-        method: 'DELETE',
-      });
-    } catch (error) {
-      console.error('Failed to remove sheet from API:', error);
-      throw error;
-    }
+  // Remove a sheet from user's collection (no-op by design; we do not delete sheets via API)
+  async removeSheet(_sheetId: string): Promise<void> {
+    // Intentionally no-op to prevent accidental deletions
+    return Promise.resolve();
   }
 
   // Health check
   async healthCheck(): Promise<{ status: string; environment?: string; timestamp?: string }> {
     try {
-      const response = await fetch(`${API_BASE_URL}/health`);
+      const response = await fetch(`${API_BASE_URL}/api/health`, { headers: { 'Accept': 'application/json' } });
       if (!response.ok) {
         throw new ApiError('Health check failed', response.status);
       }

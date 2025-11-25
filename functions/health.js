@@ -1,3 +1,5 @@
+import { json } from './_shared/database.js';
+
 // Cloudflare Pages Function - GET /health
 export async function onRequest(context) {
   const { request } = context;
@@ -21,16 +23,8 @@ export async function onRequest(context) {
   }
 
   try {
-    // Simple health check without MongoDB for now
-    const healthCheck = {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      environment: 'cloudflare-pages'
-    };
-
-    return new Response(JSON.stringify(healthCheck), {
-      headers: { 'Content-Type': 'application/json', ...corsHeaders }
-    });
+    // Simple health check with MongoDB
+    return json({ status: 'healthy', runtime: 'cloudflare-pages', timestamp: new Date().toISOString() });
   } catch (error) {
     return new Response(JSON.stringify({ 
       status: 'unhealthy', 

@@ -1024,3 +1024,54 @@ th {
         font-size: 0.8rem;
     }
 }
+
+
+.table-container thead tr.column-filters {
+  background: var(--background-color);
+}
+
+.table-container thead tr.column-filters th {
+  padding: 8px 10px;
+  vertical-align: top;
+}
+
+.table-container thead tr.column-filters input[type="date"],
+.table-container thead tr.column-filters select {
+  width: 100%;
+  padding: 6px 8px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--background-color);
+  color: var(--text-primary);
+  font-size: 0.85rem;
+  box-sizing: border-box;
+}
+
+.table-container thead tr.column-filters input[type="date"]:focus,
+.table-container thead tr.column-filters select:focus {
+  outline: none;
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.15);
+}
+
+/* Side-by-side date range inputs in the Date column */
+.table-container thead tr.column-filters th > div {
+  display: flex;
+  gap: 8px;
+}
+
+/* Clear button in table header: subtle, non-destructive */
+.table-container thead .reset-button {
+  padding: 6px 10px;
+  width: auto;
+  background: transparent;
+  color: var(--accent-color);
+  border: 1px solid var(--accent-color);
+  border-radius: 4px;
+}
+
+.table-container thead .reset-button:hover {
+  background: var(--accent-color);
+  color: #fff;
+}

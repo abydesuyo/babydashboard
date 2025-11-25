@@ -44,6 +44,38 @@ export async function connectToDatabase() {
   }
 }
 
+// Helper to call MongoDB Atlas Data API
+// Expects env bindings:
+// - DATA_API_URL (ends with /action)
+// - DATA_API_KEY
+// - DATA_SOURCE (e.g., Cluster0)
+// - DB_NAME (e.g., baby-dashboard)
+
+export async function mongoAction(env, action, payload = {}) {
+  const url = `${env.DATA_API_URL}/${action}`;
+  const body = JSON.stringify({
+    dataSource: env.DATA_SOURCE,
+    database: env.DB_NAME,
+    ...payload,
+  });
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'api-key': env.DATA_API_KEY,
+    },
+    body,
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Data API ${action} failed: ${res.status} ${text.slice(0, 500)}`);
+  }
+
+  return res.json();
+}
+
 // Helper to handle database operations with proper error handling
 export async function withDatabase(operation) {
   try {
@@ -66,4 +98,11 @@ export async function closeConnection() {
       console.error('Error closing MongoDB connection:', error);
     }
   }
+}
+
+export function json(data, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }

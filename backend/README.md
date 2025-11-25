@@ -39,10 +39,10 @@ RATE_LIMIT_MAX_REQUESTS=100
 ## API Endpoints
 
 - `GET /health` - Health check
+- `GET /api/health` - Health check (REST alias)
 - `GET /api/sheets` - Get user's saved sheets
-- `POST /api/sheets` - Save a new sheet
+- `POST /api/sheets` - Save or update a sheet association
 - `PUT /api/sheets/:id/access` - Update last accessed time
-- `DELETE /api/sheets/:id` - Remove sheet
 
 ## Deployment
 

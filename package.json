@@ -8,11 +8,12 @@
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start:all": "concurrently \"npm run dev\" \"cd backend && npm run dev\""
+    "start:all": "concurrently \"npm run dev\" \"cd backend && npm run dev\"",
+    "pages:dev": "wrangler pages dev dist",
+    "pages:deploy": "wrangler pages deploy dist"
   },
   "dependencies": {
     "@react-oauth/google": "^0.12.1",
-    "gapi-script": "^1.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "recharts": "^2.8.0"
@@ -27,9 +28,9 @@
     "eslint": "^8.55.0",
     "eslint-plugin-react-hooks": "^4.6.0",
     "eslint-plugin-react-refresh": "^0.4.5",
-    "mongodb": "^6.10.0",
     "rollup-plugin-visualizer": "^6.0.3",
     "typescript": "^5.2.2",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "wrangler": "^3.79.0"
   }
 }
