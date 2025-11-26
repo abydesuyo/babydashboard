@@ -20,7 +20,7 @@ export default defineConfig({
       'Cross-Origin-Embedder-Policy': 'unsafe-none',
     },
     proxy: {
-      '/api': 'http://localhost:3001'
+      '/api': 'http://localhost:8788'
     }
   },
   build: {

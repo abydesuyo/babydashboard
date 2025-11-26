@@ -9,12 +9,8 @@ const API_BASE_URL = (() => {
   if (fromEnv && fromEnv.trim()) {
     return fromEnv.replace(/\/$/, '');
   }
-  if (typeof window !== 'undefined') {
-    const { hostname } = window.location;
-    const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1';
-    if (isLocalhost) return 'http://localhost:3001';
-    return window.location.origin;
-  }
+  // Always use relative path for Cloudflare Pages (both dev and prod)
+  // Vite proxy will handle localhost:5173 -> localhost:8788
   return '';
 })();
 
@@ -196,7 +192,7 @@ export const getApiClient = (accessToken?: string, userEmail?: string): ApiClien
       apiClientInstance.setUserEmail(userEmail);
     }
   }
-  
+
   return apiClientInstance;
 };
 
