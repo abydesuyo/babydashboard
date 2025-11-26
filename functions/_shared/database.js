@@ -5,24 +5,31 @@ let cachedClient = null;
 let cachedDb = null;
 
 export async function connectToDatabase(env) {
+  console.log('[DEBUG] connectToDatabase called');
+
   if (cachedClient && cachedDb) {
     // Test the connection to make sure it's still alive
     try {
+      console.log('[DEBUG] Testing cached connection...');
       await cachedDb.admin().ping();
+      console.log('[DEBUG] Cached connection OK');
       return { client: cachedClient, db: cachedDb };
     } catch (error) {
-      console.warn('Cached connection failed, reconnecting:', error.message);
+      console.warn('[DEBUG] Cached connection failed, reconnecting:', error.message);
       cachedClient = null;
       cachedDb = null;
     }
   }
 
   const uri = env.MONGODB_URI || process.env.MONGODB_URI;
+  console.log('[DEBUG] MONGODB_URI exists:', !!uri);
+  console.log('[DEBUG] MONGODB_URI length:', uri ? uri.length : 0);
 
   if (!uri) {
     throw new Error('MONGODB_URI environment variable is not set');
   }
 
+  console.log('[DEBUG] Creating MongoClient...');
   const client = new MongoClient(uri, {
     maxPoolSize: 10,
     serverSelectionTimeoutMS: 5000,
@@ -30,18 +37,27 @@ export async function connectToDatabase(env) {
   });
 
   try {
+    console.log('[DEBUG] Calling client.connect()...');
     await client.connect();
+    console.log('[DEBUG] client.connect() succeeded');
+
     const db = client.db('baby-dashboard');
+    console.log('[DEBUG] Got database reference');
 
     // Test the connection
+    console.log('[DEBUG] Testing connection with ping...');
     await db.admin().ping();
+    console.log('[DEBUG] Ping succeeded');
 
     cachedClient = client;
     cachedDb = db;
 
     return { client, db };
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    console.error('[DEBUG] MongoDB connection error:', error);
+    console.error('[DEBUG] Error name:', error.name);
+    console.error('[DEBUG] Error message:', error.message);
+    console.error('[DEBUG] Error stack:', error.stack);
     throw new Error(`Database connection failed: ${error.message}`);
   }
 }
