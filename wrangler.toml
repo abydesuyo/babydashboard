@@ -12,4 +12,4 @@ compatibility_flags = ["nodejs_compat_v2"]
 [[d1_databases]]
 binding = "DB" # Available in your Worker on env.DB
 database_name = "baby-dashboard-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # Placeholder, will be set in dashboard or via wrangler
+database_id = "6903a714-74a6-4ffd-b357-672480041d87" # baby-dashboard-db
