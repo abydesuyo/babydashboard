@@ -23,8 +23,10 @@ dist-ssr
 *.sln
 *.sw?
 .claude
+.wrangler
 
 
 # Local environment variables
 .env
 baby-dashboard-key.json
+.wrangler/
