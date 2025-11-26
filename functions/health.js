@@ -1,4 +1,5 @@
-import { connectToDatabase, json, corsHeaders } from './_shared/database.js';
+import { getDb, json, corsHeaders } from './_shared/database.js';
+import { sql } from 'drizzle-orm';
 
 // Cloudflare Pages Function - GET /health
 export async function onRequestOptions() {
@@ -8,7 +9,8 @@ export async function onRequestOptions() {
 export async function onRequestGet({ env }) {
   try {
     // Check database connection
-    await connectToDatabase(env);
+    const db = getDb(env);
+    await db.run(sql`SELECT 1`);
 
     return json({
       status: 'healthy',

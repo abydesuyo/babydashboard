@@ -1,6 +1,8 @@
 // Cloudflare Pages Function - /api/sheets
-import { connectToDatabase, json, corsHeaders } from '../_shared/database.js';
+import { getDb, json, corsHeaders } from '../_shared/database.js';
 import { requireAuth } from '../_shared/auth.js';
+import { users, userSheets } from '../_shared/schema.js';
+import { eq, desc, and } from 'drizzle-orm';
 
 export async function onRequestOptions() {
   return new Response(null, { headers: corsHeaders });
@@ -12,13 +14,15 @@ export async function onRequestGet({ request, env }) {
   const { email } = auth;
 
   try {
-    const { db } = await connectToDatabase(env);
-    const docs = await db.collection('user_sheets')
-      .find({ userEmail: email })
-      .sort({ lastAccessed: -1 })
-      .toArray();
+    const db = getDb(env);
 
-    const savedSheets = docs.map(doc => ({
+    // Fetch sheets for the user
+    const results = await db.select()
+      .from(userSheets)
+      .where(eq(userSheets.userEmail, email))
+      .orderBy(desc(userSheets.lastAccessed));
+
+    const savedSheets = results.map(doc => ({
       id: doc.sheetId,
       name: doc.sheetName,
       spreadsheetId: doc.spreadsheetId,
@@ -26,10 +30,11 @@ export async function onRequestGet({ request, env }) {
       lastAccessed: doc.lastAccessed,
       createdBy: doc.createdBy,
     }));
+
     return json({ savedSheets });
   } catch (e) {
     console.error('Error fetching sheets:', e);
-    return json({ error: 'Failed to fetch sheets', details: e.message, stack: e.stack }, 500);
+    return json({ error: 'Failed to fetch sheets', details: e.message }, 500);
   }
 }
 
@@ -46,38 +51,44 @@ export async function onRequestPost({ request, env }) {
   }
 
   try {
-    const { db } = await connectToDatabase(env);
+    const db = getDb(env);
+    const now = new Date();
 
-    await db.collection('user_sheets').updateOne(
-      { userEmail: email, sheetId },
-      {
-        $set: {
-          userEmail: email,
-          sheetId,
+    // Upsert User
+    await db.insert(users)
+      .values({ email, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({
+        target: users.email,
+        set: { updatedAt: now }
+      });
+
+    // Upsert User Sheet
+    await db.insert(userSheets)
+      .values({
+        sheetId,
+        userEmail: email,
+        sheetName,
+        spreadsheetId,
+        role,
+        createdBy: email,
+        lastAccessed: now,
+        createdAt: now,
+        updatedAt: now
+      })
+      .onConflictDoUpdate({
+        target: userSheets.sheetId,
+        set: {
           sheetName,
           spreadsheetId,
           role,
-          createdBy: email,
-          lastAccessed: new Date(),
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { createdAt: new Date() },
-      },
-      { upsert: true }
-    );
-
-    await db.collection('users').updateOne(
-      { email },
-      {
-        $set: { email, updatedAt: new Date() },
-        $setOnInsert: { createdAt: new Date() },
-      },
-      { upsert: true }
-    );
+          lastAccessed: now,
+          updatedAt: now
+        }
+      });
 
     return json({ success: true, message: 'Sheet saved successfully' });
   } catch (e) {
     console.error('Error saving sheet:', e);
-    return json({ error: 'Failed to save sheet' }, 500);
+    return json({ error: 'Failed to save sheet', details: e.message }, 500);
   }
 }

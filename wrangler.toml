@@ -4,6 +4,12 @@ compatibility_date = "2024-11-25"
 compatibility_flags = ["nodejs_compat_v2"]
 
 [vars]
-# Environment variables are set in the Cloudflare Dashboard
-# MONGODB_URI
+# Environment variable bindings for Pages Functions
+# Set these in Cloudflare Pages dashboard for Production; local dev can override via CLI flags
+# MONGODB_URI is no longer needed
 # VITE_GOOGLE_CLIENT_ID
+
+[[d1_databases]]
+binding = "DB" # Available in your Worker on env.DB
+database_name = "baby-dashboard-db"
+database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" # Placeholder, will be set in dashboard or via wrangler
