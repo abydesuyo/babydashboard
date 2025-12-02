@@ -162,6 +162,9 @@ function App() {
             if (showLoadingSpinner) setIsLoading(true);
             try {
                 await loadData();
+            } catch (error: any) {
+                console.error('Failed to load data:', error);
+                alert(error?.message || 'Failed to load spreadsheet data. Please try again.');
             } finally {
                 if (showLoadingSpinner) setIsLoading(false);
             }
@@ -219,17 +222,23 @@ function App() {
             let startDateTime = '';
 
             if (row.Activity === 'SleepStarted') {
-                // Find the corresponding SleepEnded entry
+                startDateTime = row.Date;
+
+                // Find the corresponding SleepEnded entry (if it exists)
+                const startTime = new Date(row.Date).getTime();
                 const sleepEnded = sheetData
                     .filter(r => r.Activity === 'SleepEnded')
-                    .find(r => {
-                        const startTime = new Date(row.Date).getTime();
-                        const endTime = new Date(r.Date).getTime();
-                        return endTime >= startTime;
-                    });
+                    .filter(r => new Date(r.Date).getTime() > startTime)
+                    .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime())
+                [0]; // Get the earliest SleepEnded after this start
 
-                startDateTime = row.Date;
                 endDateTime = sleepEnded ? sleepEnded.Date : '';
+
+                console.log('🔧 Editing SleepStarted:', {
+                    startDateTime,
+                    endDateTime,
+                    isOngoing: !sleepEnded
+                });
             } else {
                 // For SleepEnded, find the most recent SleepStarted entry that's before this end time
                 const endTime = new Date(row.Date).getTime();
@@ -241,6 +250,8 @@ function App() {
 
                 startDateTime = sleepStarted ? sleepStarted.Date : '';
                 endDateTime = row.Date;
+
+                console.log('🔧 Editing SleepEnded:', { startDateTime, endDateTime });
             }
 
             const newEditData = { ...row, EndDateTime: endDateTime, StartDateTime: startDateTime };

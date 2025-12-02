@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     visualizer({
       filename: 'dist/stats.html',
-      open: true,
+      open: false, // Disabled auto-open - manually open dist/stats.html when needed
       gzipSize: true,
       brotliSize: true,
     })
@@ -29,6 +29,16 @@ export default defineConfig({
     // Optimize chunk size
     chunkSizeWarningLimit: 500,
     rollupOptions: {
+      onwarn(warning, warn) {
+        // Suppress eval warning from gapi-script (Google's official library)
+        if (
+          warning.code === 'EVAL' &&
+          warning.id?.includes('node_modules/gapi-script')
+        ) {
+          return;
+        }
+        warn(warning);
+      },
       // Exclude server-only dependencies from frontend bundle
       external: ['mongodb', 'realm-web'],
       output: {

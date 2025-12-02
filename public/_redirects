@@ -1,1 +1,2 @@
-/*    /index.html   200
+# Cloudflare Pages automatically serves index.html for SPAs (no 404.html present)
+# API routes (/api/*) are automatically handled by Functions in /functions directory

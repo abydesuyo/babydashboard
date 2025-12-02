@@ -108,8 +108,17 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
 
   const activityOptions = useMemo(() => {
     const s = new Set<string>();
-    dateFilteredData.forEach(r => { if (r.Activity) s.add(r.Activity); });
-    return ['All', ...Array.from(s)];
+    dateFilteredData.forEach(r => {
+      if (r.Activity) {
+        // Map sleep activities to user-friendly label
+        if (r.Activity === 'SleepStarted' || r.Activity === 'SleepEnded') {
+          s.add('Sleep');
+        } else {
+          s.add(r.Activity);
+        }
+      }
+    });
+    return ['All', ...Array.from(s).sort()];
   }, [dateFilteredData]);
 
   // Table rows use the parent-provided dateFilteredData + Activity column filter only
@@ -117,7 +126,16 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
     return dateFilteredData
       .map((row, idx) => ({ row, originalIndex: idx }))
       .filter(({ row }) => {
-        if (colFilters.activity !== 'All' && row.Activity !== colFilters.activity) return false;
+        if (colFilters.activity !== 'All') {
+          // Handle 'Sleep' filter matching both SleepStarted and SleepEnded
+          if (colFilters.activity === 'Sleep') {
+            if (row.Activity !== 'SleepStarted' && row.Activity !== 'SleepEnded') {
+              return false;
+            }
+          } else if (row.Activity !== colFilters.activity) {
+            return false;
+          }
+        }
         return true;
       });
   }, [dateFilteredData, colFilters]);
@@ -289,60 +307,83 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
                     {renderEditableCell(row.Activity, 'Activity', isEditing, editRowData, handleEditChange)}
                   </td>
                   <td>
-                    {isEditing && row.Activity === 'SleepEnded' ? (
+                    {isEditing && (row.Activity === 'SleepEnded' || row.Activity === 'SleepStarted') ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#4CAF50' }}>
-                            Sleep Start Time:
-                          </label>
-                          <input
-                            type="datetime-local"
-                            value={formatToDateTimeLocal(editRowData?.StartDateTime || '')}
-                            onChange={(e) => {
-                              // Update the start time
-                              handleEditChange(e, 'StartDateTime');
-                              // When start time changes, recalculate duration
-                              if (editRowData?.EndDateTime && e.target.value) {
-                                const startTime = new Date(e.target.value).getTime();
-                                const endTime = new Date(editRowData.EndDateTime).getTime();
-                                const durationMinutes = Math.round((endTime - startTime) / 60000);
-                                handleEditChange({ target: { value: durationMinutes.toString() } } as any, 'Quantity');
-                              }
-                            }}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#2196F3' }}>
-                            Sleep End Time:
-                          </label>
-                          <input
-                            type="datetime-local"
-                            value={formatToDateTimeLocal(editRowData?.EndDateTime || '')}
-                            onChange={(e) => {
-                              handleEditChange(e, 'EndDateTime');
-                              // When end time changes, recalculate duration
-                              if (editRowData?.Quantity && e.target.value) {
-                                const startTime = new Date(new Date(e.target.value).getTime() - (parseInt(editRowData.Quantity) * 60000)).getTime();
-                                const endTime = new Date(e.target.value).getTime();
-                                const durationMinutes = Math.round((endTime - startTime) / 60000);
-                                handleEditChange({ target: { value: durationMinutes.toString() } } as any, 'Quantity');
-                              }
-                            }}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px' }}>
-                            Duration (minutes):
-                          </label>
-                          <input
-                            type="text"
-                            value={editRowData?.Quantity || ''}
-                            onChange={(e) => handleEditChange(e, 'Quantity')}
-                            style={{ width: '100%' }}
-                          />
-                        </div>
+                        {/* Check if this is an ongoing sleep (no EndDateTime) */}
+                        {row.Activity === 'SleepStarted' && !editRowData?.EndDateTime ? (
+                          // Ongoing sleep - only show start time
+                          <div>
+                            <div style={{ padding: '8px', backgroundColor: '#fff3cd', borderRadius: '4px', marginBottom: '8px', color: '#856404' }}>
+                              ⏱️ Ongoing sleep session - only start time can be edited
+                            </div>
+                            <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#4CAF50' }}>
+                              Sleep Start Time:
+                            </label>
+                            <input
+                              type="datetime-local"
+                              value={formatToDateTimeLocal(editRowData?.StartDateTime || '')}
+                              onChange={(e) => handleEditChange(e, 'StartDateTime')}
+                              style={{ width: '100%' }}
+                            />
+                          </div>
+                        ) : (
+                          // Completed sleep - show start, end, and duration
+                          <>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#4CAF50' }}>
+                                Sleep Start Time:
+                              </label>
+                              <input
+                                type="datetime-local"
+                                value={formatToDateTimeLocal(editRowData?.StartDateTime || '')}
+                                onChange={(e) => {
+                                  // Update the start time
+                                  handleEditChange(e, 'StartDateTime');
+                                  // When start time changes, recalculate duration
+                                  if (editRowData?.EndDateTime && e.target.value) {
+                                    const startTime = new Date(e.target.value).getTime();
+                                    const endTime = new Date(editRowData.EndDateTime).getTime();
+                                    const durationMinutes = Math.round((endTime - startTime) / 60000);
+                                    handleEditChange({ target: { value: durationMinutes.toString() } } as any, 'Quantity');
+                                  }
+                                }}
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px', color: '#2196F3' }}>
+                                Sleep End Time:
+                              </label>
+                              <input
+                                type="datetime-local"
+                                value={formatToDateTimeLocal(editRowData?.EndDateTime || '')}
+                                onChange={(e) => {
+                                  handleEditChange(e, 'EndDateTime');
+                                  // When end time changes, recalculate duration
+                                  if (editRowData?.StartDateTime && e.target.value) {
+                                    const startTime = new Date(editRowData.StartDateTime).getTime();
+                                    const endTime = new Date(e.target.value).getTime();
+                                    const durationMinutes = Math.round((endTime - startTime) / 60000);
+                                    handleEditChange({ target: { value: durationMinutes.toString() } } as any, 'Quantity');
+                                  }
+                                }}
+                                style={{ width: '100%' }}
+                              />
+                            </div>
+                            <div>
+                              <label style={{ display: 'block', fontSize: '0.85em', fontWeight: 'bold', marginBottom: '4px' }}>
+                                Duration (minutes):
+                              </label>
+                              <input
+                                type="text"
+                                value={editRowData?.Quantity || ''}
+                                onChange={(e) => handleEditChange(e, 'Quantity')}
+                                style={{ width: '100%' }}
+                                readOnly
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
                     ) : (
                       renderEditableCell(row.Quantity, 'Quantity', isEditing, editRowData, handleEditChange)
@@ -381,8 +422,7 @@ export const Dashboard: React.FC<DashboardProps> = memo(({
                       <button
                         className="edit-button"
                         onClick={() => handleEditClick(row, originalIndex)}
-                        disabled={isOperationPending || row.Activity === 'SleepStarted'}
-                        title={row.Activity === 'SleepStarted' ? 'Please edit the corresponding SleepEnded row instead' : ''}
+                        disabled={isOperationPending}
                       >
                         Edit
                       </button>

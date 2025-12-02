@@ -23,27 +23,43 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
   const loadData = useCallback(async () => {
     if (!accessToken || !userEmail || !spreadsheetId) return;
 
-    const gapi = await initGapiClient(accessToken);
-    
-    const metadataResponse = await gapi.client.sheets.spreadsheets.get({
-      spreadsheetId,
-    });
+    try {
+      const gapi = await initGapiClient(accessToken);
 
-    const firstSheet = metadataResponse.result.sheets?.[0];
-    const firstSheetName = firstSheet?.properties?.title;
-    
-    if (!firstSheetName || firstSheet.properties?.sheetId === undefined) {
-      throw new Error("No sheets with a valid name and ID found.");
+      const metadataResponse = await gapi.client.sheets.spreadsheets.get({
+        spreadsheetId,
+      });
+
+      const firstSheet = metadataResponse.result.sheets?.[0];
+      const firstSheetName = firstSheet?.properties?.title;
+
+      if (!firstSheetName || firstSheet.properties?.sheetId === undefined) {
+        throw new Error("No sheets with a valid name and ID found.");
+      }
+
+      const dataResponse = await gapi.client.sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: firstSheetName,
+      });
+
+      const parsedData = parseSheetData(dataResponse.result.values || []);
+      setSheetData(parsedData);
+      setSheetInfo({ name: firstSheetName, id: firstSheet.properties.sheetId, spreadsheetId });
+    } catch (error: any) {
+      // Provide user-friendly error messages
+      const status = error?.status || error?.result?.error?.code;
+      const message = error?.result?.error?.message || error?.message || 'Unknown error';
+
+      if (status === 403) {
+        throw new Error(`Access denied: You don't have permission to access this spreadsheet. Please check sharing settings.`);
+      } else if (status === 404) {
+        throw new Error(`Spreadsheet not found: The spreadsheet may have been deleted or the link is incorrect.`);
+      } else if (status === 500) {
+        throw new Error(`Google Sheets error: The spreadsheet might be corrupted or temporarily unavailable. Please try again or use a different spreadsheet.`);
+      } else {
+        throw new Error(`Failed to load spreadsheet: ${message}`);
+      }
     }
-
-    const dataResponse = await gapi.client.sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: firstSheetName,
-    });
-    
-    const parsedData = parseSheetData(dataResponse.result.values || []);
-    setSheetData(parsedData);
-    setSheetInfo({ name: firstSheetName, id: firstSheet.properties.sheetId, spreadsheetId });
   }, [accessToken, userEmail, spreadsheetId]);
 
   // Find insertion point for chronological order (descending)
@@ -96,7 +112,7 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
     if (!accessToken || !spreadsheetId) return;
 
     const gapi = await initGapiClient(accessToken);
-    
+
     await gapi.client.sheets.spreadsheets.batchUpdate({
       spreadsheetId,
       resource: {
@@ -126,7 +142,7 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
         const endDateTime = new Date(newEntry.EndDateTime);
         const startDateTime = new Date(newEntry.DateTime);
         const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 60000);
-        
+
         if (durationMinutes < 0) {
           throw new Error("End time must be after start time.");
         }
@@ -145,7 +161,7 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
 
       const insertIndex = findInsertIndex(newEntry.DateTime);
       await insertRowsInSheet(rowsToAdd, insertIndex);
-      
+
       // Reload data to ensure consistency
       await loadData();
     } finally {
@@ -161,72 +177,83 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
     try {
       // Handle sleep entries specially
       if (editRowData.Activity === 'SleepStarted' || editRowData.Activity === 'SleepEnded') {
-        // Find the specific sleep session being edited
-        // For SleepEnded: find the corresponding SleepStarted before it
-        // For SleepStarted: find the corresponding SleepEnded after it
+        // Check if this is an ongoing sleep session (has StartDateTime but no EndDateTime)
+        const isOngoingSleep = editRowData.Activity === 'SleepStarted' &&
+          editRowData.StartDateTime &&
+          !editRowData.EndDateTime;
+
         let relatedRows: ActivityRow[] = [];
-        
-        if (editRowData.Activity === 'SleepEnded') {
+
+        if (isOngoingSleep) {
+          // For ongoing sleep, only update the SleepStarted row
+          relatedRows = [editRowData];
+        } else if (editRowData.Activity === 'SleepEnded') {
           // Find the matching SleepStarted entry that comes before this SleepEnded
+          const endTime = new Date(editRowData.EndDateTime || editRowData.Date).getTime();
           const sleepStarted = sheetData
             .filter(row => row.Activity === 'SleepStarted')
-            .find(row => {
-              const startTime = new Date(row.Date).getTime();
-              const endTime = new Date(editRowData.Date).getTime();
-              return startTime <= endTime;
-            });
-          
+            .filter(row => new Date(row.Date).getTime() < endTime)
+            .sort((a, b) => new Date(b.Date).getTime() - new Date(a.Date).getTime())
+          [0]; // Get the most recent SleepStarted before this SleepEnded
+
           relatedRows = [editRowData];
           if (sleepStarted) {
             relatedRows.push(sleepStarted);
           }
-        } else if (editRowData.Activity === 'SleepStarted') {
-          // Find the matching SleepEnded entry that comes after this SleepStarted
+        } else if (editRowData.Activity === 'SleepStarted' && editRowData.EndDateTime) {
+          // For completed sleep being edited from SleepStarted row
+          const startTime = new Date(editRowData.StartDateTime || editRowData.Date).getTime();
           const sleepEnded = sheetData
             .filter(row => row.Activity === 'SleepEnded')
-            .find(row => {
-              const startTime = new Date(editRowData.Date).getTime();
-              const endTime = new Date(row.Date).getTime();
-              return endTime >= startTime;
-            });
-          
+            .filter(row => new Date(row.Date).getTime() > startTime)
+            .sort((a, b) => new Date(a.Date).getTime() - new Date(b.Date).getTime())
+          [0]; // Get the earliest SleepEnded after this SleepStarted
+
           relatedRows = [editRowData];
           if (sleepEnded) {
             relatedRows.push(sleepEnded);
           }
         }
 
+        // Delete the related rows
         for (const row of relatedRows.sort((a, b) => b.sheetRowIndex - a.sheetRowIndex)) {
           await deleteRowFromSheet(row.sheetRowIndex);
         }
 
         // Insert new sleep entries
-        if (editRowData.EndDateTime) {
+        if (isOngoingSleep) {
+          // For ongoing sleep, only insert SleepStarted
+          const startDateTime = editRowData.StartDateTime || editRowData.Date;
+          await insertRowsInSheet([
+            [startDateTime.replace('T', ' '), 'SleepStarted', '1']
+          ], findInsertIndex(startDateTime));
+        } else if (editRowData.EndDateTime && editRowData.StartDateTime) {
+          // For completed sleep session, insert both rows
           const endDateTime = new Date(editRowData.EndDateTime);
-          const startDateTime = new Date(editRowData.Date);
+          const startDateTime = new Date(editRowData.StartDateTime);
           const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 60000);
-          
+
           const sleepRows = [
             [editRowData.EndDateTime.replace('T', ' '), 'SleepEnded', durationMinutes.toString()],
-            [editRowData.Date.replace('T', ' '), 'SleepStarted', '1'],
+            [editRowData.StartDateTime.replace('T', ' '), 'SleepStarted', '1'],
           ].sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
 
-          const insertIndex = findInsertIndex(editRowData.Date);
+          const insertIndex = findInsertIndex(editRowData.StartDateTime);
           await insertRowsInSheet(sleepRows, insertIndex);
         }
       } else {
         // Calculate new insertion point BEFORE deleting
         const newInsertIndex = findInsertIndex(editRowData.Date);
-        
+
         // Adjust insertion index if it's after the row we're about to delete
         // This accounts for the shift that happens when we delete the original row
-        const adjustedInsertIndex = newInsertIndex > editRowData.sheetRowIndex 
-          ? newInsertIndex - 1 
+        const adjustedInsertIndex = newInsertIndex > editRowData.sheetRowIndex
+          ? newInsertIndex - 1
           : newInsertIndex;
-        
+
         // Delete original row
         await deleteRowFromSheet(editRowData.sheetRowIndex);
-        
+
         // Insert updated row at adjusted position
         await insertRowsInSheet([[
           editRowData.Date,
@@ -251,7 +278,7 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
       if (row.Activity === 'SleepStarted' || row.Activity === 'SleepEnded') {
         // Find the specific sleep session being deleted
         let relatedRows: ActivityRow[] = [];
-        
+
         if (row.Activity === 'SleepEnded') {
           // Find the matching SleepStarted entry that comes before this SleepEnded
           const sleepStarted = sheetData
@@ -261,7 +288,7 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
               const endTime = new Date(row.Date).getTime();
               return startTime <= endTime;
             });
-          
+
           relatedRows = [row];
           if (sleepStarted) {
             relatedRows.push(sleepStarted);
@@ -275,7 +302,7 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
               const endTime = new Date(r.Date).getTime();
               return endTime >= startTime;
             });
-          
+
           relatedRows = [row];
           if (sleepEnded) {
             relatedRows.push(sleepEnded);
