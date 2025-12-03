@@ -63,15 +63,32 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
   }, [accessToken, userEmail, spreadsheetId]);
 
   // Find insertion point for chronological order (descending)
-  const findInsertIndex = useCallback((dateStr: string): number => {
+  const findInsertIndex = useCallback((dateStr: string, deletedRowIndices?: number[]): number => {
     const newDate = new Date(dateStr.replace('T', ' '));
     for (let i = 0; i < sheetData.length; i++) {
       const rowDate = new Date(sheetData[i].Date.replace('T', ' '));
       if (rowDate < newDate) {
-        return sheetData[i].sheetRowIndex;
+        let insertIndex = sheetData[i].sheetRowIndex;
+
+        // Adjust for deleted rows that come before the insertion point
+        if (deletedRowIndices && deletedRowIndices.length > 0) {
+          const deletedBeforeInsert = deletedRowIndices.filter(idx => idx < insertIndex).length;
+          insertIndex -= deletedBeforeInsert;
+        }
+
+        return insertIndex;
       }
     }
-    return sheetData.length > 0 ? sheetData[sheetData.length - 1].sheetRowIndex + 1 : 2;
+    // If no row is older, insert at the end
+    let insertIndex = sheetData.length > 0 ? sheetData[sheetData.length - 1].sheetRowIndex + 1 : 2;
+
+    // Adjust for deleted rows
+    if (deletedRowIndices && deletedRowIndices.length > 0) {
+      const deletedBeforeInsert = deletedRowIndices.filter(idx => idx < insertIndex).length;
+      insertIndex -= deletedBeforeInsert;
+    }
+
+    return insertIndex;
   }, [sheetData]);
 
   // Insert rows into sheet
@@ -215,7 +232,8 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
           }
         }
 
-        // Delete the related rows
+        // Delete the related rows and track their indices
+        const deletedIndices = relatedRows.map(row => row.sheetRowIndex);
         for (const row of relatedRows.sort((a, b) => b.sheetRowIndex - a.sheetRowIndex)) {
           await deleteRowFromSheet(row.sheetRowIndex);
         }
@@ -226,40 +244,43 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
           const startDateTime = editRowData.StartDateTime || editRowData.Date;
           await insertRowsInSheet([
             [startDateTime.replace('T', ' '), 'SleepStarted', '1']
-          ], findInsertIndex(startDateTime));
+          ], findInsertIndex(startDateTime, deletedIndices));
         } else if (editRowData.EndDateTime && editRowData.StartDateTime) {
-          // For completed sleep session, insert both rows
+          // For completed sleep session, insert both rows separately
+          // They may not be consecutive in chronological order
           const endDateTime = new Date(editRowData.EndDateTime);
           const startDateTime = new Date(editRowData.StartDateTime);
           const durationMinutes = Math.round((endDateTime.getTime() - startDateTime.getTime()) / 60000);
 
-          const sleepRows = [
-            [editRowData.EndDateTime.replace('T', ' '), 'SleepEnded', durationMinutes.toString()],
-            [editRowData.StartDateTime.replace('T', ' '), 'SleepStarted', '1'],
-          ].sort((a, b) => new Date(b[0]).getTime() - new Date(a[0]).getTime());
+          // Insert SleepEnded first (usually has the later/higher timestamp)
+          const endRow = [editRowData.EndDateTime.replace('T', ' '), 'SleepEnded', durationMinutes.toString()];
+          const endInsertIndex = findInsertIndex(editRowData.EndDateTime, deletedIndices);
+          await insertRowsInSheet([endRow], endInsertIndex);
 
-          const insertIndex = findInsertIndex(editRowData.StartDateTime);
-          await insertRowsInSheet(sleepRows, insertIndex);
+          // After inserting the end row, we need to adjust deletedIndices
+          // to account for the newly inserted row when calculating the start row position
+          const adjustedDeletedIndices = deletedIndices.map(idx => {
+            // If the deleted index was at or after where we just inserted, increment it
+            return idx >= endInsertIndex ? idx + 1 : idx;
+          });
+
+          // Now insert SleepStarted
+          const startRow = [editRowData.StartDateTime.replace('T', ' '), 'SleepStarted', '1'];
+          const startInsertIndex = findInsertIndex(editRowData.StartDateTime, adjustedDeletedIndices);
+          await insertRowsInSheet([startRow], startInsertIndex);
         }
       } else {
-        // Calculate new insertion point BEFORE deleting
-        const newInsertIndex = findInsertIndex(editRowData.Date);
-
-        // Adjust insertion index if it's after the row we're about to delete
-        // This accounts for the shift that happens when we delete the original row
-        const adjustedInsertIndex = newInsertIndex > editRowData.sheetRowIndex
-          ? newInsertIndex - 1
-          : newInsertIndex;
-
         // Delete original row
-        await deleteRowFromSheet(editRowData.sheetRowIndex);
+        const deletedIndex = editRowData.sheetRowIndex;
+        await deleteRowFromSheet(deletedIndex);
 
-        // Insert updated row at adjusted position
+        // Calculate insertion point and insert updated row
+        const insertIndex = findInsertIndex(editRowData.Date, [deletedIndex]);
         await insertRowsInSheet([[
           editRowData.Date,
           editRowData.Activity,
           editRowData.Quantity
-        ]], adjustedInsertIndex);
+        ]], insertIndex);
       }
 
       // Reload data to ensure consistency
