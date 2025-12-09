@@ -4,6 +4,7 @@ import { SheetSelector } from './components/SheetSelector';
 
 // Lazy load heavy components to reduce initial bundle size
 const Dashboard = lazy(() => import('./components/Dashboard').then(module => ({ default: module.Dashboard })));
+import { SleepTimer } from './components/SleepTimer';
 import { useGoogleSheets } from './hooks/useGoogleSheets';
 import { useTokenManager } from './hooks/useTokenManager';
 import { calculateSummary, processDataForChart } from './utils/dataProcessing';
@@ -73,6 +74,8 @@ function App() {
         addEntry,
         updateEntry,
         deleteEntry,
+        startSleepSession,
+        endSleepSession,
         isOperationPending
     } = useGoogleSheets(
         shouldInitializeSheets ? accessToken : null,
@@ -203,6 +206,30 @@ function App() {
             setEditRowData(null);
         });
     }, [deleteEntry, makeProtectedCall]);
+
+    // Sleep timer handlers
+    const handleStartSleep = useCallback(async (startTime?: string) => {
+        return makeProtectedCall(async () => {
+            await startSleepSession(startTime);
+        });
+    }, [startSleepSession, makeProtectedCall]);
+
+    const handleStopSleep = useCallback(async (sleepStartedRow: ActivityRow) => {
+        return makeProtectedCall(async () => {
+            await endSleepSession(sleepStartedRow);
+        });
+    }, [endSleepSession, makeProtectedCall]);
+
+    const handleUpdateSleepStartTime = useCallback(async (sleepStartedRow: ActivityRow, newStartTime: string) => {
+        return makeProtectedCall(async () => {
+            const updatedRow = {
+                ...sleepStartedRow,
+                StartDateTime: newStartTime,
+                EndDateTime: undefined // Keep it as ongoing sleep
+            };
+            await updateEntry(updatedRow);
+        });
+    }, [updateEntry, makeProtectedCall]);
 
     // UI handlers
     const toggleTheme = () => setTheme(prev => prev === 'light' ? 'dark' : 'light');
@@ -493,44 +520,53 @@ function App() {
 
                                 {(!isLoading || sheetData.length > 0) && (
                                     <>
-                                        <div className="add-entry-container filters-container">
-                                            <div className="filter-item">
-                                                <label htmlFor="new-activity">Activity</label>
-                                                <select
-                                                    id="new-activity"
-                                                    name="Activity"
-                                                    value={newEntry.Activity}
-                                                    onChange={handleNewEntryChange}
-                                                >
-                                                    <option value="Formula">Formula</option>
-                                                    <option value="Sleep">Sleep</option>
-                                                    <option value="Pooped">Pooped</option>
-                                                </select>
-                                            </div>
-
-                                            {newEntry.Activity !== 'Sleep' && (
+                                        <div className="entry-panels-container">
+                                            <SleepTimer
+                                                sheetData={sheetData}
+                                                onStartSleep={handleStartSleep}
+                                                onStopSleep={handleStopSleep}
+                                                onUpdateStartTime={handleUpdateSleepStartTime}
+                                                isOperationPending={isOperationPending}
+                                            />
+                                            <div className="add-entry-container filters-container">
                                                 <div className="filter-item">
-                                                    <label htmlFor="new-datetime">Date & Time</label>
-                                                    <input
-                                                        id="new-datetime"
-                                                        type="datetime-local"
-                                                        name="DateTime"
-                                                        value={newEntry.DateTime}
+                                                    <label htmlFor="new-activity">Activity</label>
+                                                    <select
+                                                        id="new-activity"
+                                                        name="Activity"
+                                                        value={newEntry.Activity}
                                                         onChange={handleNewEntryChange}
-                                                    />
+                                                    >
+                                                        <option value="Formula">Formula</option>
+                                                        <option value="Sleep">Sleep</option>
+                                                        <option value="Pooped">Pooped</option>
+                                                    </select>
                                                 </div>
-                                            )}
 
-                                            {renderNewEntryFields()}
+                                                {newEntry.Activity !== 'Sleep' && (
+                                                    <div className="filter-item">
+                                                        <label htmlFor="new-datetime">Date & Time</label>
+                                                        <input
+                                                            id="new-datetime"
+                                                            type="datetime-local"
+                                                            name="DateTime"
+                                                            value={newEntry.DateTime}
+                                                            onChange={handleNewEntryChange}
+                                                        />
+                                                    </div>
+                                                )}
 
-                                            <div className="filter-item">
-                                                <button
-                                                    onClick={handleAddEntry}
-                                                    className="add-button"
-                                                    disabled={isOperationPending}
-                                                >
-                                                    {isOperationPending ? 'Adding...' : 'Add Entry'}
-                                                </button>
+                                                {renderNewEntryFields()}
+
+                                                <div className="filter-item">
+                                                    <button
+                                                        onClick={handleAddEntry}
+                                                        className="add-button"
+                                                        disabled={isOperationPending}
+                                                    >
+                                                        {isOperationPending ? 'Adding...' : 'Add Entry'}
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
 

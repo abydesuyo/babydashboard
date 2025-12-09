@@ -290,6 +290,77 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
     }
   }, [accessToken, userEmail, sheetInfo, sheetData, deleteRowFromSheet, findInsertIndex, insertRowsInSheet, loadData]);
 
+  // Helper to get current local datetime in 'YYYY-MM-DD HH:MM' format
+  const getCurrentLocalDateTime = () => {
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    return now.toISOString().slice(0, 16).replace('T', ' ');
+  };
+
+  // Start a new sleep session (adds SleepStarted entry)
+  const startSleepSession = useCallback(async (startTime?: string) => {
+    console.log('🛏️ startSleepSession called', {
+      hasAccessToken: !!accessToken,
+      hasUserEmail: !!userEmail,
+      sheetInfoName: sheetInfo.name,
+      sheetInfoId: sheetInfo.id
+    });
+
+    if (!accessToken || !userEmail || !sheetInfo.name) {
+      console.warn('🛏️ startSleepSession: Guard condition failed, returning early');
+      return;
+    }
+
+    setIsOperationPending(true);
+    try {
+      // Use provided startTime or current local time
+      const formattedDateTime = startTime
+        ? startTime.replace('T', ' ')
+        : getCurrentLocalDateTime();
+
+      console.log('🛏️ startSleepSession: Inserting row', { formattedDateTime });
+
+      const insertIndex = findInsertIndex(formattedDateTime);
+      await insertRowsInSheet([
+        [formattedDateTime, 'SleepStarted', '1']
+      ], insertIndex);
+
+      console.log('🛏️ startSleepSession: Row inserted, reloading data');
+      await loadData();
+      console.log('🛏️ startSleepSession: Complete');
+    } catch (error) {
+      console.error('🛏️ startSleepSession: Error', error);
+      throw error;
+    } finally {
+      setIsOperationPending(false);
+    }
+  }, [accessToken, userEmail, sheetInfo, findInsertIndex, insertRowsInSheet, loadData]);
+
+  // End an active sleep session (adds SleepEnded entry)
+  const endSleepSession = useCallback(async (sleepStartedRow: ActivityRow) => {
+    if (!accessToken || !userEmail || !sheetInfo.name) return;
+
+    setIsOperationPending(true);
+    try {
+      // Use current local time for end time
+      const endDateTime = getCurrentLocalDateTime();
+      const startDateTime = new Date(sleepStartedRow.Date.replace(' ', 'T'));
+      const endTime = new Date();
+      const durationMinutes = Math.round((endTime.getTime() - startDateTime.getTime()) / 60000);
+
+      console.log('🛏️ endSleepSession: Ending sleep', { endDateTime, durationMinutes });
+
+      const insertIndex = findInsertIndex(endDateTime);
+      await insertRowsInSheet([
+        [endDateTime, 'SleepEnded', durationMinutes.toString()]
+      ], insertIndex);
+
+      await loadData();
+    } finally {
+      setIsOperationPending(false);
+    }
+  }, [accessToken, userEmail, sheetInfo, findInsertIndex, insertRowsInSheet, loadData]);
+
   // Delete entry
   const deleteEntry = useCallback(async (row: ActivityRow) => {
     if (!accessToken || !userEmail || !sheetInfo.name) return;
@@ -352,6 +423,8 @@ export const useGoogleSheets = (accessToken: string | null, userEmail: string | 
     addEntry,
     updateEntry,
     deleteEntry,
+    startSleepSession,
+    endSleepSession,
     isOperationPending
   };
 };
