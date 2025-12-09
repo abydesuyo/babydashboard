@@ -473,14 +473,15 @@ th {
 .sleep-timer-container {
     background-color: var(--card-background);
     border-radius: 8px;
-    padding: 20px;
+    padding: 15px;
     box-shadow: 0 4px 8px var(--shadow-color);
     border-left: 4px solid #9b59b6;
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: space-between;
-    gap: 15px;
+    justify-content: center;
+    gap: 10px;
     transition: background-color 0.3s;
 }
 
