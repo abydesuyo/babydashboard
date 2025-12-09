@@ -580,12 +580,6 @@ th {
     text-align: center;
 }
 
-@media (max-width: 767px) {
-    .time-adjust-section {
-        display: none;
-    }
-}
-
 .time-adjust-toggle {
     background: none;
     border: none;
