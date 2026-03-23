@@ -69,6 +69,7 @@ export const SleepTimer: React.FC<SleepTimerProps> = ({
     const [elapsedTime, setElapsedTime] = useState<number>(0);
     const [showTimeAdjust, setShowTimeAdjust] = useState(false);
     const [adjustedStartTime, setAdjustedStartTime] = useState('');
+    const [isSleepPending, setIsSleepPending] = useState(false);
 
     // Find active sleep session (SleepStarted without a subsequent SleepEnded)
     const activeSleep = useMemo(() => {
@@ -123,12 +124,22 @@ export const SleepTimer: React.FC<SleepTimerProps> = ({
     }, [activeSleep]);
 
     const handleStartClick = useCallback(async () => {
-        await onStartSleep();
+        setIsSleepPending(true);
+        try {
+            await onStartSleep();
+        } finally {
+            setIsSleepPending(false);
+        }
     }, [onStartSleep]);
 
     const handleStopClick = useCallback(async () => {
         if (activeSleep) {
-            await onStopSleep(activeSleep);
+            setIsSleepPending(true);
+            try {
+                await onStopSleep(activeSleep);
+            } finally {
+                setIsSleepPending(false);
+            }
         }
     }, [activeSleep, onStopSleep]);
 
@@ -136,8 +147,13 @@ export const SleepTimer: React.FC<SleepTimerProps> = ({
         if (activeSleep && adjustedStartTime) {
             const originalTime = toDateTimeLocalFormat(activeSleep.Date);
             if (adjustedStartTime !== originalTime) {
-                await onUpdateStartTime(activeSleep, adjustedStartTime);
-                setShowTimeAdjust(false);
+                setIsSleepPending(true);
+                try {
+                    await onUpdateStartTime(activeSleep, adjustedStartTime);
+                    setShowTimeAdjust(false);
+                } finally {
+                    setIsSleepPending(false);
+                }
             }
         }
     }, [activeSleep, adjustedStartTime, onUpdateStartTime]);
@@ -160,9 +176,9 @@ export const SleepTimer: React.FC<SleepTimerProps> = ({
                     <button
                         className="sleep-timer-button stop"
                         onClick={handleStopClick}
-                        disabled={isOperationPending}
+                        disabled={isOperationPending || isSleepPending}
                     >
-                        {isOperationPending ? 'Stopping...' : 'Stop Sleep'}
+                        {isSleepPending ? 'Stopping...' : 'Stop Sleep'}
                     </button>
 
                     <div className="time-adjust-section">
@@ -186,7 +202,7 @@ export const SleepTimer: React.FC<SleepTimerProps> = ({
                                     <button
                                         className="time-adjust-save"
                                         onClick={handleTimeAdjust}
-                                        disabled={isOperationPending}
+                                        disabled={isOperationPending || isSleepPending}
                                     >
                                         Save
                                     </button>
@@ -215,9 +231,9 @@ export const SleepTimer: React.FC<SleepTimerProps> = ({
                     <button
                         className="sleep-timer-button start"
                         onClick={handleStartClick}
-                        disabled={isOperationPending}
+                        disabled={isOperationPending || isSleepPending}
                     >
-                        {isOperationPending ? 'Starting...' : 'Start Sleep'}
+                        {isSleepPending ? 'Starting...' : 'Start Sleep'}
                     </button>
                 </>
             )}
